@@ -1,0 +1,5 @@
+import {z} from "zod";
+export const extractedEventSchema=z.object({company:z.string().nullable(),title:z.string().min(1),description:z.string().nullable(),startAt:z.string().datetime({offset:true}).nullable(),endAt:z.string().datetime({offset:true}).nullable(),location:z.string().nullable(),mode:z.enum(["IN_PERSON","VIRTUAL","HYBRID","UNKNOWN"]),type:z.enum(["INFO_SESSION","TECH_TALK","COFFEE_CHAT","INTERVIEW","CAREER_FAIR","DEADLINE","WORKSHOP","OTHER"]),careerCategories:z.array(z.enum(["SWE","ML / AI","Hardware","Product","Finance","Consulting","Data","Other"])),registrationUrl:z.string().url().nullable(),registrationDeadline:z.string().datetime({offset:true}).nullable(),confidence:z.number().min(0).max(1)});
+export const extractionSchema=z.object({events:z.array(extractedEventSchema).max(50)});
+export type ExtractedEvent=z.infer<typeof extractedEventSchema>;
+export const submissionSchema=z.object({url:z.string().url().refine(v=>v.startsWith("http://")||v.startsWith("https://"),"Public HTTP(S) URL required")});

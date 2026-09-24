@@ -15,6 +15,21 @@ public URL → safe fetch → text reduction → structured LLM extraction
 
 The repository contains realistic seed records marked `isMock=true`. The UI calls them **Sample data** so development content cannot be mistaken for live ingestion.
 
+## Project map
+
+```text
+app/                  Pages and API endpoints
+components/           Reusable interface components
+lib/ingestion/        Fetch, extract, validate, and deduplicate events
+lib/db.ts             Shared Prisma client
+prisma/schema.prisma  PostgreSQL data model
+prisma/migrations/    Database migrations
+prisma/seed.ts        Development seed data
+scripts/ingest.ts     Manual ingestion command
+```
+
+There is intentionally no UI framework or deployment-specific build layer. The interface uses React components, ordinary CSS, and native form controls.
+
 ## Local setup
 
 1. Install Node 22+ and pnpm.
@@ -60,7 +75,7 @@ pnpm ingest <id>   # manually ingest one source
 
 ## Production notes
 
-- Use a serverless PostgreSQL provider with pooled connections. The included Neon adapter works in edge/serverless runtimes.
+- Use a PostgreSQL connection pool in production. Managed providers such as Neon, Supabase, and Railway all work with Prisma.
 - Keep `OPENAI_API_KEY`, `DATABASE_URL`, and `CRON_SECRET` server-side.
 - Add authentication before exposing source administration or moderation.
 - Replace the small in-memory submission limiter with Redis or a gateway rate limit for multi-instance deployment.

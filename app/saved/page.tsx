@@ -1,3 +1,37 @@
 "use client";
-import Link from "next/link"; import {Bookmark} from "lucide-react"; import {useSaved} from "@/components/saved-provider"; import {mockEvents} from "@/lib/mock-events"; import {EventCard} from "@/components/event-card";
-export default function SavedPage(){const {saved}=useSaved();const events=mockEvents.filter(e=>saved.includes(e.id));return <div className="subpage"><p className="eyebrow">Your shortlist</p><h1>Saved events</h1><p className="subhead">Keep the opportunities you care about in one place.</p>{events.length?<div className="event-list saved-list">{events.map(e=><EventCard event={e} key={e.id}/>)}</div>:<div className="empty-state"><div className="empty-radar"><Bookmark size={25}/></div><h3>Nothing saved yet</h3><p>Bookmark events from the feed and they’ll show up here.</p><Link href="/" className="register-button inline-button">Browse events</Link></div>}</div>}
+import Link from "next/link";
+import { Bookmark } from "lucide-react";
+import { useSaved } from "@/components/saved-provider";
+import { mockEvents } from "@/lib/mock-events";
+import { EventCard } from "@/components/event-card";
+export default function SavedPage() {
+  const { saved } = useSaved();
+  const events = mockEvents.filter((e) => saved.includes(e.id));
+  return (
+    <div className="subpage">
+      <p className="eyebrow">Your shortlist</p>
+      <h1>Saved events</h1>
+      <p className="subhead">
+        Keep the opportunities you care about in one place.
+      </p>
+      {events.length ? (
+        <div className="event-list saved-list">
+          {events.map((e) => (
+            <EventCard event={e} key={e.id} />
+          ))}
+        </div>
+      ) : (
+        <div className="empty-state">
+          <div className="empty-radar">
+            <Bookmark size={25} />
+          </div>
+          <h3>Nothing saved yet</h3>
+          <p>Bookmark events from the feed and they’ll show up here.</p>
+          <Link href="/" className="register-button inline-button">
+            Browse events
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}

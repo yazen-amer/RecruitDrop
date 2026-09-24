@@ -1,4 +1,42 @@
-import {PrismaClient} from "@prisma/client"; import {PrismaNeon} from "@prisma/adapter-neon"; import {mockEvents} from "../lib/mock-events"; import {normalize} from "../lib/ingestion/dedupe";
-if(!process.env.DATABASE_URL)throw new Error("DATABASE_URL is required");const db=new PrismaClient({adapter:new PrismaNeon({connectionString:process.env.DATABASE_URL})});
-for(const item of mockEvents){const company=await db.company.upsert({where:{normalizedName:normalize(item.company)},create:{name:item.company,normalizedName:normalize(item.company)},update:{}});const source=await db.source.upsert({where:{url:item.sourceUrl},create:{name:item.sourceName,url:item.sourceUrl},update:{}});await db.event.upsert({where:{slug:item.slug},create:{slug:item.slug,title:item.title,normalizedTitle:normalize(item.title),description:item.description,startAt:new Date(item.startAt),endAt:item.endAt?new Date(item.endAt):null,location:item.location,mode:item.mode,type:item.type,careerCategories:item.categories,registrationUrl:item.registrationUrl,registrationDeadline:item.deadline?new Date(item.deadline):null,isPublished:true,isMock:true,companyId:company.id,sources:{create:{sourceId:source.id,sourceUrl:item.sourceUrl}}},update:{}})}
-await db.$disconnect();console.log(`Seeded ${mockEvents.length} mock events`);
+import { PrismaClient } from "@prisma/client";
+import { mockEvents } from "../lib/mock-events";
+import { normalize } from "../lib/ingestion/dedupe";
+
+const db = new PrismaClient();
+
+for (const item of mockEvents) {
+  const company = await db.company.upsert({
+    where: { normalizedName: normalize(item.company) },
+    create: { name: item.company, normalizedName: normalize(item.company) },
+    update: {},
+  });
+  const source = await db.source.upsert({
+    where: { url: item.sourceUrl },
+    create: { name: item.sourceName, url: item.sourceUrl },
+    update: {},
+  });
+  await db.event.upsert({
+    where: { slug: item.slug },
+    create: {
+      slug: item.slug,
+      title: item.title,
+      normalizedTitle: normalize(item.title),
+      description: item.description,
+      startAt: new Date(item.startAt),
+      endAt: item.endAt ? new Date(item.endAt) : null,
+      location: item.location,
+      mode: item.mode,
+      type: item.type,
+      careerCategories: item.categories,
+      registrationUrl: item.registrationUrl,
+      registrationDeadline: item.deadline ? new Date(item.deadline) : null,
+      isPublished: true,
+      isMock: true,
+      companyId: company.id,
+      sources: { create: { sourceId: source.id, sourceUrl: item.sourceUrl } },
+    },
+    update: {},
+  });
+}
+await db.$disconnect();
+console.log(`Seeded ${mockEvents.length} mock events`);

@@ -1,3 +1,122 @@
-import Link from "next/link"; import {notFound} from "next/navigation"; import {ArrowLeft,CalendarDays,Clock,ExternalLink,MapPin,ShieldCheck} from "lucide-react"; import {findEvent,mockEvents} from "@/lib/mock-events"; import {SaveButton} from "@/components/save-button";
-export function generateStaticParams(){return mockEvents.map(e=>({slug:e.slug}))}
-export default async function EventDetail({params}:{params:Promise<{slug:string}>}){const {slug}=await params;const event=findEvent(slug);if(!event)notFound();const d=new Date(event.startAt);return <div className="detail-page"><Link href="/" className="back-link"><ArrowLeft size={16}/> Back to all events</Link><div className="detail-grid"><article><div className="detail-company"><span className="company-avatar large" style={{background:event.companyColor}}>{event.companyInitials}</span><div><span>Hosted by</span><b>{event.company}</b></div></div><p className="eyebrow">{event.type.replaceAll("_"," ")}</p><h1>{event.title}</h1><div className="detail-tags">{event.categories.map(c=><span key={c}>{c}</span>)}{event.isMock&&<span className="sample-pill">Sample data</span>}</div><section className="description"><h2>About this event</h2><p>{event.description}</p></section><section className="source-panel"><ShieldCheck size={20}/><div><b>Source transparency</b><p>Discovered via {event.sourceName}. Details should be verified on the original page.</p><a href={event.sourceUrl} target="_blank" rel="noreferrer">View original source <ExternalLink size={13}/></a></div></section></article><aside className="detail-sidebar"><div className="details-card"><h2>Event details</h2><div className="detail-row"><CalendarDays/><div><span>Date</span><b>{d.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric",timeZone:"America/New_York"})}</b></div></div><div className="detail-row"><Clock/><div><span>Time</span><b>{d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/New_York"})} ET</b></div></div><div className="detail-row"><MapPin/><div><span>Location</span><b>{event.location}</b></div></div><a className="primary-wide" href={event.registrationUrl} target="_blank" rel="noreferrer">Register or apply <ExternalLink size={15}/></a><SaveButton id={event.id}/></div></aside></div></div>}
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import {
+  ArrowLeft,
+  CalendarDays,
+  Clock,
+  ExternalLink,
+  MapPin,
+  ShieldCheck,
+} from "lucide-react";
+import { findEvent, mockEvents } from "@/lib/mock-events";
+import { SaveButton } from "@/components/save-button";
+export function generateStaticParams() {
+  return mockEvents.map((e) => ({ slug: e.slug }));
+}
+export default async function EventDetail({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  const event = findEvent(slug);
+  if (!event) notFound();
+  const d = new Date(event.startAt);
+  return (
+    <div className="detail-page">
+      <Link href="/" className="back-link">
+        <ArrowLeft size={16} /> Back to all events
+      </Link>
+      <div className="detail-grid">
+        <article>
+          <div className="detail-company">
+            <span
+              className="company-avatar large"
+              style={{ background: event.companyColor }}
+            >
+              {event.companyInitials}
+            </span>
+            <div>
+              <span>Hosted by</span>
+              <b>{event.company}</b>
+            </div>
+          </div>
+          <p className="eyebrow">{event.type.replaceAll("_", " ")}</p>
+          <h1>{event.title}</h1>
+          <div className="detail-tags">
+            {event.categories.map((c) => (
+              <span key={c}>{c}</span>
+            ))}
+            {event.isMock && <span className="sample-pill">Sample data</span>}
+          </div>
+          <section className="description">
+            <h2>About this event</h2>
+            <p>{event.description}</p>
+          </section>
+          <section className="source-panel">
+            <ShieldCheck size={20} />
+            <div>
+              <b>Source transparency</b>
+              <p>
+                Discovered via {event.sourceName}. Details should be verified on
+                the original page.
+              </p>
+              <a href={event.sourceUrl} target="_blank" rel="noreferrer">
+                View original source <ExternalLink size={13} />
+              </a>
+            </div>
+          </section>
+        </article>
+        <aside className="detail-sidebar">
+          <div className="details-card">
+            <h2>Event details</h2>
+            <div className="detail-row">
+              <CalendarDays />
+              <div>
+                <span>Date</span>
+                <b>
+                  {d.toLocaleDateString("en-US", {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric",
+                    timeZone: "America/New_York",
+                  })}
+                </b>
+              </div>
+            </div>
+            <div className="detail-row">
+              <Clock />
+              <div>
+                <span>Time</span>
+                <b>
+                  {d.toLocaleTimeString("en-US", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    timeZone: "America/New_York",
+                  })}{" "}
+                  ET
+                </b>
+              </div>
+            </div>
+            <div className="detail-row">
+              <MapPin />
+              <div>
+                <span>Location</span>
+                <b>{event.location}</b>
+              </div>
+            </div>
+            <a
+              className="primary-wide"
+              href={event.registrationUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Register or apply <ExternalLink size={15} />
+            </a>
+            <SaveButton id={event.id} />
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}

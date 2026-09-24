@@ -1,6 +1,5 @@
 generator client {
-  provider   = "prisma-client-js"
-  engineType = "client"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -14,6 +13,7 @@ enum EventMode {
   HYBRID
   UNKNOWN
 }
+
 enum EventType {
   INFO_SESSION
   TECH_TALK
@@ -24,6 +24,7 @@ enum EventType {
   WORKSHOP
   OTHER
 }
+
 enum SourceKind {
   WEB_PAGE
   RSS
@@ -31,6 +32,7 @@ enum SourceKind {
   API
   SUBMISSION
 }
+
 enum RunStatus {
   PENDING
   RUNNING
@@ -38,6 +40,7 @@ enum RunStatus {
   PARTIAL
   FAILED
 }
+
 enum SubmissionStatus {
   PENDING
   PROCESSING
@@ -91,33 +94,34 @@ model Event {
 }
 
 model Source {
-  id             String         @id @default(cuid())
-  name           String
-  url            String         @unique
-  kind           SourceKind     @default(WEB_PAGE)
-  enabled        Boolean        @default(true)
-  config         Json           @default("{}")
-  lastCheckedAt  DateTime?
-  nextCheckAt    DateTime?
-  eventSources   EventSource[]
-  ingestionRuns  IngestionRun[]
+  id              String           @id @default(cuid())
+  name            String
+  url             String           @unique
+  kind            SourceKind       @default(WEB_PAGE)
+  enabled         Boolean          @default(true)
+  config          Json             @default("{}")
+  lastCheckedAt   DateTime?
+  nextCheckAt     DateTime?
+  eventSources    EventSource[]
+  ingestionRuns   IngestionRun[]
   submittedEvents SubmittedEvent[]
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@index([enabled, nextCheckAt])
 }
 
 model EventSource {
-  eventId      String
-  sourceId     String
-  sourceUrl    String
+  eventId       String
+  sourceId      String
+  sourceUrl     String
   sourceEventId String?
-  firstSeenAt  DateTime @default(now())
-  lastSeenAt   DateTime @updatedAt
-  rawPayload   Json?
-  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  source       Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  firstSeenAt   DateTime @default(now())
+  lastSeenAt    DateTime @updatedAt
+  rawPayload    Json?
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  source        Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
   @@id([eventId, sourceId, sourceUrl])
   @@index([sourceUrl])
 }
@@ -137,6 +141,7 @@ model SavedEvent {
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
   @@id([userId, eventId])
   @@index([eventId])
 }
@@ -152,22 +157,24 @@ model SubmittedEvent {
   source      Source?          @relation(fields: [sourceId], references: [id], onDelete: SetNull)
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
+
   @@index([status, createdAt])
 }
 
 model IngestionRun {
-  id               String    @id @default(cuid())
-  sourceId         String
-  status           RunStatus @default(PENDING)
-  startedAt        DateTime?
-  finishedAt       DateTime?
-  discoveredCount  Int       @default(0)
-  createdCount     Int       @default(0)
-  updatedCount     Int       @default(0)
-  errorCount       Int       @default(0)
-  errorLog         Json?
-  source           Source    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  createdAt        DateTime  @default(now())
+  id              String    @id @default(cuid())
+  sourceId        String
+  status          RunStatus @default(PENDING)
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  discoveredCount Int       @default(0)
+  createdCount    Int       @default(0)
+  updatedCount    Int       @default(0)
+  errorCount      Int       @default(0)
+  errorLog        Json?
+  source          Source    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  createdAt       DateTime  @default(now())
+
   @@index([sourceId, createdAt])
   @@index([status, createdAt])
 }

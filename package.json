@@ -6,12 +6,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "postinstall": "prisma generate",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx prisma/seed.ts",
-    "ingest": "tsx scripts/ingest.ts",
+    "db:seed": "node --env-file=.env --import tsx prisma/seed.ts",
+    "ingest": "node --env-file=.env --import tsx scripts/ingest.ts",
     "test": "vitest run"
   },
   "dependencies": {

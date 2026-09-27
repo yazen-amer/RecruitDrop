@@ -83,6 +83,7 @@ model Event {
   company              Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
   sources              EventSource[]
   saves                SavedEvent[]
+  feedback             EventFeedback[]
   createdAt            DateTime      @default(now())
   updatedAt            DateTime      @updatedAt
 
@@ -91,6 +92,44 @@ model Event {
   @@index([type, startAt])
   @@index([mode, startAt])
   @@index([normalizedTitle, startAt])
+}
+
+enum FeedbackReason {
+  NOT_RECRUITING
+  WRONG_CATEGORY
+  EXPIRED
+  DUPLICATE
+  BAD_LINK
+}
+
+model EventFeedback {
+  id        String         @id @default(cuid())
+  eventId   String
+  deviceId  String
+  reason    FeedbackReason
+  note      String?
+  event     Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now())
+
+  @@unique([eventId, deviceId])
+  @@index([reason, createdAt])
+}
+
+model AlertSubscription {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  categories     String[]
+  companyNames   String[]
+  eventTypes     String[]
+  verificationToken String @unique
+  unsubscribeToken  String @unique
+  verifiedAt     DateTime?
+  lastSentAt     DateTime?
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([enabled, verifiedAt, lastSentAt])
 }
 
 model Source {

@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
-import { Bookmark, Menu, Plus, Radar } from "lucide-react";
+import { Bell, Bookmark, Menu, Plus, Radar } from "lucide-react";
 import { usePathname } from "next/navigation";
 export function SiteHeader() {
   const pathname = usePathname();
   const nav = [
     { href: "/", label: "Discover" },
     { href: "/saved", label: "Saved" },
+    { href: "/alerts", label: "Alerts" },
     { href: "/submit", label: "Submit an event" },
   ];
   return (
@@ -32,6 +33,7 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="top-actions">
+          <Link href="/alerts" className="icon-link" aria-label="Personalized alerts"><Bell size={18} /></Link>
           <Link href="/saved" className="icon-link" aria-label="Saved events">
             <Bookmark size={19} />
           </Link>

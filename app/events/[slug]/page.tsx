@@ -7,19 +7,25 @@ import {
   ExternalLink,
   MapPin,
   ShieldCheck,
+  CalendarPlus,
 } from "lucide-react";
 import { findEvent, mockEvents } from "@/lib/mock-events";
+import { getEventBySlug } from "@/lib/events";
 import { SaveButton } from "@/components/save-button";
+import { EventFeedback } from "@/components/event-feedback";
 export function generateStaticParams() {
   return mockEvents.map((e) => ({ slug: e.slug }));
 }
+export const dynamic = "force-dynamic";
 export default async function EventDetail({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const event = findEvent(slug);
+  const event = process.env.DATABASE_URL
+    ? (await getEventBySlug(slug)) ?? findEvent(slug)
+    : findEvent(slug);
   if (!event) notFound();
   const d = new Date(event.startAt);
   return (
@@ -53,6 +59,7 @@ export default async function EventDetail({
             <h2>About this event</h2>
             <p>{event.description}</p>
           </section>
+          {!event.isMock && <EventFeedback eventId={event.id} />}
           <section className="source-panel">
             <ShieldCheck size={20} />
             <div>
@@ -113,6 +120,8 @@ export default async function EventDetail({
             >
               Register or apply <ExternalLink size={15} />
             </a>
+            {!event.isMock && <a className="secondary-wide" href={`/api/events/${event.slug}/calendar`}><CalendarPlus size={15} /> Add to calendar</a>}
+            <Link className="secondary-wide" href={`/alerts?company=${encodeURIComponent(event.company)}`}>Follow {event.company}</Link>
             <SaveButton id={event.id} />
           </div>
         </aside>

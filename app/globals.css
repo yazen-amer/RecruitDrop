@@ -860,6 +860,37 @@ footer b {
   font-size: 12px;
   line-height: 1.5;
 }
+.alerts-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 68px 0;
+}
+.alerts-page h1,
+.form-page h1 {
+  font-family: Georgia, serif;
+  font-size: clamp(38px, 6vw, 58px);
+  margin: 0;
+  letter-spacing: -0.035em;
+}
+.page-intro { color: #625e58; font-size: 17px; line-height: 1.6; max-width: 620px; }
+.alert-form { background: #fffefa; border: 1px solid var(--border); border-radius: 12px; padding: 28px; margin-top: 28px; box-shadow: 10px 10px 0 #e6ded4; }
+.alert-form > label, .alert-form legend { display: grid; gap: 8px; font-size: 13px; font-weight: 700; }
+.alert-form > label { margin-bottom: 22px; }
+.alert-form input[type="email"], .alert-form input[name="companies"] { height: 46px; border: 1px solid var(--input); border-radius: 7px; padding: 0 12px; font: inherit; background: white; }
+.alert-form fieldset { border: 0; padding: 0; margin: 0 0 22px; }
+.alert-form small { color: #89827a; font-weight: 400; }
+.choice-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 11px; }
+.choice-grid label { font-size: 13px; color: #514d48; }
+.alert-form button { border: 0; }
+.form-status, .success-banner { color: #246344; background: #e6f1e9; border-radius: 7px; padding: 11px 13px; font-size: 13px; }
+.deadline-badge { color: #9c2424; background: #f8dfdc; border-radius: 999px; padding: 3px 7px; font-weight: 700; }
+.deadline-line { font-size: 12px; color: #9c2424; margin: 10px 0 0; }
+.feedback-control { position: relative; margin: 26px 0; }
+.text-button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: #77716a; padding: 0; cursor: pointer; }
+.feedback-menu { position: absolute; z-index: 4; top: 28px; left: 0; display: grid; min-width: 210px; background: white; border: 1px solid var(--border); border-radius: 8px; padding: 6px; box-shadow: 0 12px 30px rgba(0,0,0,.1); }
+.feedback-menu button { text-align: left; border: 0; background: transparent; padding: 9px; border-radius: 5px; cursor: pointer; }
+.feedback-menu button:hover { background: var(--secondary); }
+.feedback-thanks { display: inline-block; margin: 24px 0; color: #357153; font-size: 13px; }
 .form-note {
   color: #8b847b;
   margin: 14px 2px 0;
@@ -915,4 +946,6 @@ footer b {
   .detail-page {
     padding-top: 36px;
   }
+  .choice-grid { grid-template-columns: repeat(2, 1fr); }
+  .select-row { flex-wrap: wrap; }
 }

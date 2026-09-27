@@ -1,4 +1,4 @@
-export type EventMode = "IN_PERSON" | "VIRTUAL" | "HYBRID";
+export type EventMode = "IN_PERSON" | "VIRTUAL" | "HYBRID" | "UNKNOWN";
 export type EventType =
   | "INFO_SESSION"
   | "TECH_TALK"
@@ -6,7 +6,8 @@ export type EventType =
   | "INTERVIEW"
   | "CAREER_FAIR"
   | "DEADLINE"
-  | "WORKSHOP";
+  | "WORKSHOP"
+  | "OTHER";
 export type RecruitingEvent = {
   id: string;
   slug: string;

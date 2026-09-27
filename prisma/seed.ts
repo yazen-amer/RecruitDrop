@@ -1,8 +1,35 @@
 import { PrismaClient } from "@prisma/client";
 import { mockEvents } from "../lib/mock-events";
 import { normalize } from "../lib/ingestion/dedupe";
+import { trustedSources } from "../lib/ingestion/sources";
 
 const db = new PrismaClient();
+
+const trustedUrls = trustedSources.map((source) => source.url);
+const managedSourceNames = [
+  ...trustedSources.map((source) => source.name),
+  "Cornell Engineering Career Resources",
+];
+await db.source.updateMany({
+  where: {
+    name: { in: managedSourceNames },
+    url: { notIn: trustedUrls },
+  },
+  data: { enabled: false },
+});
+
+for (const source of trustedSources) {
+  await db.source.upsert({
+    where: { url: source.url },
+    create: source,
+    update: {
+      name: source.name,
+      kind: source.kind,
+      config: source.config,
+      enabled: true,
+    },
+  });
+}
 
 for (const item of mockEvents) {
   const company = await db.company.upsert({
@@ -39,4 +66,6 @@ for (const item of mockEvents) {
   });
 }
 await db.$disconnect();
-console.log(`Seeded ${mockEvents.length} mock events`);
+console.log(
+  `Seeded ${mockEvents.length} mock events and synced ${trustedSources.length} trusted sources`,
+);

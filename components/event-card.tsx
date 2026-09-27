@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useState } from "react";
 import {
   Bookmark,
   CalendarDays,
@@ -20,8 +21,11 @@ const labels: Record<string, string> = {
 };
 export function EventCard({ event }: { event: RecruitingEvent }) {
   const { saved, toggle } = useSaved();
+  const [now] = useState(() => Date.now());
   const d = new Date(event.startAt);
   const isSaved = saved.includes(event.id);
+  const deadline = event.deadline ? new Date(event.deadline) : null;
+  const closingSoon = deadline && deadline.getTime() - now < 7 * 86_400_000;
   return (
     <article className="event-card">
       <div className="date-tile">
@@ -49,6 +53,7 @@ export function EventCard({ event }: { event: RecruitingEvent }) {
           <span>{event.company}</span>
           <span className="dot">·</span>
           <span>{labels[event.type]}</span>
+          {closingSoon && <span className="deadline-badge">Closing soon</span>}
         </div>
         <Link href={`/events/${event.slug}`} className="event-title">
           {event.title}
@@ -81,6 +86,7 @@ export function EventCard({ event }: { event: RecruitingEvent }) {
           </div>
           <span className="source">via {event.sourceName}</span>
         </div>
+        {deadline && <p className="deadline-line">Registration deadline: {deadline.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })}</p>}
       </div>
       <div className="card-actions">
         <button

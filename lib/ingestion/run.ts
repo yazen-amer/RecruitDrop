@@ -1,5 +1,5 @@
 import { getDb } from "@/lib/db";
-import { fetchPublicPage } from "./fetch";
+import { fetchSourceDocuments, parseSourceConfig } from "./fetch";
 import { extractEvents } from "./extract";
 import { normalize, similarity } from "./dedupe";
 const slugify = (s: string) => normalize(s).replaceAll(" ", "-").slice(0, 70);
@@ -12,9 +12,31 @@ export async function ingestSource(sourceId: string) {
   let created = 0,
     updated = 0;
   try {
-    const content = await fetchPublicPage(source.url);
-    const events = await extractEvents(content, source.url);
-    for (const item of events) {
+    const config = parseSourceConfig(source.config);
+    const documents = await fetchSourceDocuments(source);
+    const extracted: PromiseSettledResult<{
+      sourceUrl: string;
+      events: Awaited<ReturnType<typeof extractEvents>>;
+    }>[] = [];
+    for (let index = 0; index < documents.length; index += 4) {
+      extracted.push(
+        ...(await Promise.allSettled(
+          documents.slice(index, index + 4).map(async (document) => ({
+            sourceUrl: document.url,
+            events: await extractEvents(document.content, document.url),
+          })),
+        )),
+      );
+    }
+    const failures = extracted.filter((result) => result.status === "rejected");
+    const pages = extracted.flatMap((result) =>
+      result.status === "fulfilled" ? [result.value] : [],
+    );
+    if (!pages.length && failures.length) throw failures[0].reason;
+    const events = pages.flatMap((page) =>
+      page.events.map((event) => ({ event, sourceUrl: page.sourceUrl })),
+    );
+    for (const { event: item, sourceUrl } of events) {
       if (!item.startAt) continue;
       const company = item.company
         ? await db.company.upsert({
@@ -39,7 +61,7 @@ export async function ingestSource(sourceId: string) {
         (c) =>
           similarity(c.title, item.title) >= 0.65 ||
           c.sources.some(
-            (s) => s.sourceUrl === (item.registrationUrl || source.url),
+            (s) => s.sourceUrl === sourceUrl,
           ),
       );
       if (duplicate) {
@@ -54,10 +76,10 @@ export async function ingestSource(sourceId: string) {
                   eventId_sourceId_sourceUrl: {
                     eventId: duplicate.id,
                     sourceId,
-                    sourceUrl: source.url,
+                    sourceUrl,
                   },
                 },
-                create: { sourceId, sourceUrl: source.url, rawPayload: item },
+                create: { sourceId, sourceUrl, rawPayload: item },
                 update: { rawPayload: item },
               },
             },
@@ -83,9 +105,11 @@ export async function ingestSource(sourceId: string) {
               ? new Date(item.registrationDeadline)
               : null,
             extractionConfidence: item.confidence,
+            isPublished:
+              config.autoPublishTrusted === true && item.confidence >= 0.65,
             companyId: company?.id,
             sources: {
-              create: { sourceId, sourceUrl: source.url, rawPayload: item },
+              create: { sourceId, sourceUrl, rawPayload: item },
             },
           },
         });
@@ -94,16 +118,28 @@ export async function ingestSource(sourceId: string) {
     }
     await db.source.update({
       where: { id: sourceId },
-      data: { lastCheckedAt: new Date() },
+      data: {
+        lastCheckedAt: new Date(),
+        nextCheckAt: new Date(Date.now() + (config.intervalHours ?? 12) * 36e5),
+      },
     });
     return await db.ingestionRun.update({
       where: { id: run.id },
       data: {
-        status: "SUCCEEDED",
+        status: failures.length ? "PARTIAL" : "SUCCEEDED",
         finishedAt: new Date(),
         discoveredCount: events.length,
         createdCount: created,
         updatedCount: updated,
+        errorCount: failures.length,
+        errorLog: failures.length
+          ? failures.map((failure) => ({
+              message:
+                failure.status === "rejected" && failure.reason instanceof Error
+                  ? failure.reason.message
+                  : "Detail page extraction failed",
+            }))
+          : undefined,
       },
     });
   } catch (error) {

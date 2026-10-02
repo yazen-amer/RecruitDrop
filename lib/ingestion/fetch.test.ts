@@ -92,3 +92,17 @@ it("paginates the public API within its configured bound", async () => {
   const docs = await fetchSourceDocuments({ url: "https://api.example.edu/api/2/events?pp=100", kind: "API", config: { maxApiPages: 2 } });
   expect(docs.map((doc) => doc.url)).toEqual(["https://api.example.edu/api/2/events?pp=100", "https://api.example.edu/api/2/events?pp=100&page=2"]);
 });
+
+it("retries a timed-out public page once without losing the source", async () => {
+  let attempts = 0;
+  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+    if (input.toString().endsWith("robots.txt")) return new Response("User-agent: *\nAllow: /");
+    if (++attempts === 1) throw new DOMException("Timed out", "AbortError");
+    return new Response('{"events":[]}', { headers: { "content-type": "application/json" } });
+  }));
+  const failure = vi.fn();
+  const docs = await fetchSourceDocuments({ url: "https://retry.example.edu/api/events", kind: "API", config: {} }, failure);
+  expect(docs).toHaveLength(1);
+  expect(attempts).toBe(2);
+  expect(failure).not.toHaveBeenCalled();
+});

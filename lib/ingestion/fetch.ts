@@ -92,7 +92,7 @@ function assertPublicUrl(raw: string) {
 async function requestText(raw: string, redirects = 0): Promise<string> {
   assertPublicUrl(raw);
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15_000);
+  const timer = setTimeout(() => controller.abort(), 30_000);
   try {
     const response = await fetch(raw, {
       signal: controller.signal,
@@ -188,10 +188,15 @@ async function fetchInBatches(urls: string[], onFailure: (url: string, error: un
   const pages: { url: string; raw: string }[] = [];
   for (let index = 0; index < urls.length; index += batchSize) {
     const settled = await Promise.allSettled(
-      urls.slice(index, index + batchSize).map(async (url) => ({
-        url,
-        raw: await fetchText(url),
-      })),
+      urls.slice(index, index + batchSize).map(async (url) => {
+        try { return { url, raw: await fetchText(url) }; }
+        catch (error) {
+          // Retry a timed-out public request once; robots pacing still applies.
+          if (error instanceof Error && error.name === "AbortError")
+            return { url, raw: await fetchText(url) };
+          throw error;
+        }
+      }),
     );
     for (const [offset, result] of settled.entries())
       if (result.status === "fulfilled") pages.push(result.value);

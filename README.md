@@ -65,7 +65,7 @@ This updates existing sources and disables retired configurations without deleti
 pnpm ingest
 ```
 
-Or run only one source with `pnpm ingest <source-id>`. A source's JSON `config` controls detail/listing-page limits, calendar months, included/excluded URL patterns, check interval, and whether high-confidence events from that trusted source may publish automatically. Fetching and extraction are bounded. Page fetches and event writes fail independently; run logs retain failed URLs and counts for discovered, created, updated, and failed items. Console summaries also count skipped events. Failed sources receive a 12-hour retry delay.
+Or run only one source with `pnpm ingest <source-id>`. A source's JSON `config` controls detail/listing-page limits, calendar months, included/excluded URL patterns, check interval, and whether high-confidence events from that trusted source may publish automatically. Fetching and extraction are bounded. Page requests have a 30-second timeout and retry timeouts once with robots pacing. Page fetches and event writes fail independently; run logs retain failed URLs and counts for discovered, created, updated, and failed items. Console summaries also count skipped events. Failed sources receive a 12-hour retry delay.
 
 For deployment, `/api/cron/ingest` processes one due source per invocation and declares a 300-second execution budget, so robots-paced crawling does not queue multiple long runs in one request. It requires `Authorization: Bearer $CRON_SECRET`. `vercel.json` schedules this every three hours on Vercel; an equivalent external scheduler can call the same endpoint on any host. A deployed server—not a laptop—owns the schedule.
 

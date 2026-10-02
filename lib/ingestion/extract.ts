@@ -5,17 +5,19 @@ import {
 } from "./schema";
 
 const recruitingTerms =
-  /\b(recruit(?:er|ing|ment)?|hiring|career fair|job fair|info(?:rmation)? session|coffee chat|employer|internship|co-?op|on-campus interview|application deadline|tech talk|company presentation|networking event|tabling|get to know)\b/i;
+  /\b(recruit(?:er|ing|ment)?|hiring|career fair|job fair|career workshop|career panel|career exploration|career development|career options|career in|careers week|info(?:rmation)? session|coffee chat|employer|internship|co-?op|on-campus interview|application deadline|tech talk|company presentation|networking event|networking reception|tabling|get to know)\b/i;
 const excludedTerms =
-  /\b(exhibit|exhibition|concert|performance|(?:graduate|law|medical|business) school fair|study abroad|m\.?eng\.?|master'?s|graduate program|professional certificate|admissions?|research program)\b/i;
+  /\b(cancelled|canceled|exhibit|exhibition|concert|performance|(?:graduate|law|medical|business) school fair|study abroad|m\.?eng\.?|master'?s|graduate program|professional certificate|admissions?|research program)\b/i;
 
 function relevant(title: string, description: string) {
   const value = `${title} ${description}`;
+  if (/partner meeting|directors roundtable|members.only|by invitation|partner organizations/i.test(title + " " + description)) return false;
   if (!recruitingTerms.test(value) || excludedTerms.test(title)) return false;
   const descriptionSignals =
     /recruiter|hiring|employer|job openings|full-time roles|internship roles|career opportunities/i;
   if (!recruitingTerms.test(title) && !descriptionSignals.test(description))
     return false;
+  if (/tech talk/i.test(title) && !/recruit|internship|career|hiring|employer/i.test(value)) return false;
   if (/info(?:rmation)? session/i.test(title)) {
     const titleSignals = /internship|recruit|career|employer|company|hiring|tech talk|coffee chat/i;
     return titleSignals.test(title) || descriptionSignals.test(description);
@@ -59,11 +61,10 @@ function classifyCategories(value: string) {
 }
 
 function inferCompany(title: string) {
-  const prefix = title
-    .split(/\s(?:[-–—:]\s)?(?:virtual\s+)?(?:info(?:rmation)? session|coffee chats?|tech talk|recruiting|career fair|job fair|tabling)\b/i)[0]
-    .replace(/^(meet|get to know|join)\s+/i, "")
-    .trim();
-  return prefix && prefix.length < title.length && prefix.length <= 80
+  const match = title.trim().match(/^(.*?)\s+(?:[-\u2013\u2014:]\s*)?(?:virtual\s+)?(?:info(?:rmation)? session|coffee chats?|tech talk|recruiting|career fair|job fair|tabling)\b/i);
+  if (!match) return null;
+  const prefix = match[1].replace(/^(meet|get to know|join)\s+/i, "").trim();
+  return prefix && !/cornell|career|engineering|workshop|networking|student|employer|university|college/i.test(prefix) && prefix.length <= 80
     ? prefix
     : null;
 }
@@ -75,6 +76,35 @@ function validOffsetDate(value: unknown): string | null {
 }
 
 type JsonObject = Record<string, unknown>;
+
+function graduateCalendarEvents(content: string): ExtractedEvent[] | null {
+  let body: { events?: JsonObject[]; total_pages?: number };
+  try { body = JSON.parse(content); } catch { return null; }
+  if (!Array.isArray(body.events) || typeof body.total_pages !== "number") return null;
+  return body.events.flatMap((row): ExtractedEvent[] => {
+    if (row.all_day === true) return []; // Date-only events do not establish a start time.
+    const utc = (value: unknown) => typeof value === "string" && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
+      ? validOffsetDate(value.replace(" ", "T") + "Z") : null;
+    const title = typeof row.title === "string" ? decodeEntities(row.title) : "";
+    const html = typeof row.description === "string" ? row.description : "";
+    const description = decodeEntities(html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")).trim();
+    const startAt = utc(row.utc_start_date);
+    if (!title || !startAt || Date.parse(startAt) < Date.now() - 3_600_000 || !relevant(title, description)) return [];
+    const venue = row.venue as JsonObject | undefined;
+    const location = typeof venue?.venue === "string" ? decodeEntities(venue.venue) : null;
+    const registration = [...html.matchAll(/<a[^>]+href=["'](https?:\/\/[^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)]
+      .find((match) => /register|registration|rsvp|attend/i.test(match[2].replace(/<[^>]*>/g, "")));
+    const value = title + " " + description;
+    return [{
+      sourceUrl: typeof row.url === "string" ? row.url : undefined,
+      company: null, title, description: description || null, startAt, endAt: utc(row.utc_end_date), location,
+      mode: row.is_virtual === true || /^(online|virtual|zoom)$/i.test(location ?? "") ? "VIRTUAL" : "UNKNOWN",
+      type: classifyType(value), careerCategories: classifyCategories(value),
+      registrationUrl: registration ? decodeEntities(registration[1]) : null,
+      registrationDeadline: null, confidence: 0.96,
+    }];
+  });
+}
 
 function localistEvents(content: string): ExtractedEvent[] | null {
   let body: unknown;
@@ -100,46 +130,48 @@ function localistEvents(content: string): ExtractedEvent[] | null {
     const instances = Array.isArray(event.event_instances)
       ? event.event_instances
       : [];
-    const instanceRow = instances[0] as JsonObject | undefined;
-    const instance = instanceRow?.event_instance as JsonObject | undefined;
-    const startAt = validOffsetDate(instance?.start);
-    if (!startAt || Date.parse(startAt) < Date.now() - 3_600_000) continue;
-    const value = `${event.title} ${description}`;
-    const experience = typeof event.experience === "string" ? event.experience : "";
-    const streamUrl = typeof event.stream_url === "string" ? event.stream_url : "";
-    const location =
-      typeof event.location_name === "string" && event.location_name
-        ? event.location_name
-        : typeof event.location === "string" && event.location
-          ? event.location
-          : streamUrl
-            ? "Online"
-            : null;
-    const registrationUrl = [event.ticket_url, event.url, event.localist_url].find(
-      (url) => typeof url === "string" && /^https?:\/\//.test(url),
-    );
-    results.push({
-      company: inferCompany(event.title),
-      title: event.title,
-      description: description || null,
-      startAt,
-      endAt: validOffsetDate(instance?.end),
-      location,
-      mode:
-        experience === "virtual" || streamUrl
-          ? "VIRTUAL"
-          : experience === "hybrid"
-            ? "HYBRID"
-            : experience === "inperson"
-              ? "IN_PERSON"
-              : "UNKNOWN",
-      type: classifyType(value),
-      careerCategories: classifyCategories(value),
-      registrationUrl:
-        typeof registrationUrl === "string" ? registrationUrl : null,
-      registrationDeadline: /deadline/i.test(event.title) ? startAt : null,
-      confidence: 0.96,
-    });
+    for (const instanceRow of instances as JsonObject[]) {
+      const instance = instanceRow?.event_instance as JsonObject | undefined;
+      const startAt = validOffsetDate(instance?.start);
+      if (!startAt || Date.parse(startAt) < Date.now() - 3_600_000) continue;
+      const value = `${event.title} ${description}`;
+      const experience = typeof event.experience === "string" ? event.experience : "";
+      const streamUrl = typeof event.stream_url === "string" ? event.stream_url : "";
+      const location =
+        typeof event.location_name === "string" && event.location_name
+          ? event.location_name
+          : typeof event.location === "string" && event.location
+            ? event.location
+            : streamUrl
+              ? "Online"
+              : null;
+      const registrationUrl = [event.ticket_url].find(
+        (url) => typeof url === "string" && /^https?:\/\//.test(url),
+      );
+      results.push({
+        sourceUrl: typeof event.localist_url === "string" ? event.localist_url : undefined,
+        company: inferCompany(event.title),
+        title: event.title,
+        description: description || null,
+        startAt,
+        endAt: validOffsetDate(instance?.end),
+        location,
+        mode:
+          experience === "virtual" || streamUrl
+            ? "VIRTUAL"
+            : experience === "hybrid"
+              ? "HYBRID"
+              : experience === "inperson"
+                ? "IN_PERSON"
+                : "UNKNOWN",
+        type: classifyType(value),
+        careerCategories: classifyCategories(value),
+        registrationUrl:
+          typeof registrationUrl === "string" ? registrationUrl : null,
+        registrationDeadline: /deadline/i.test(event.title) ? startAt : null,
+        confidence: 0.96,
+      });
+    }
   }
   return results;
 }
@@ -171,7 +203,7 @@ function jsonLdEvents(content: string): ExtractedEvent[] | null {
     const title = typeof node.name === "string" ? node.name : "";
     const description = typeof node.description === "string" ? node.description : "";
     const startAt = validOffsetDate(node.startDate);
-    if (!title || !startAt || !relevant(title, description)) return [];
+    if (!title || !startAt || Date.parse(startAt) < Date.now() - 3_600_000 || !relevant(title, description) || String(node.eventStatus).includes("Cancelled")) return [];
     const locationNode = node.location as JsonObject | undefined;
     const location =
       typeof locationNode?.name === "string"
@@ -183,11 +215,12 @@ function jsonLdEvents(content: string): ExtractedEvent[] | null {
     const organizer = node.organizer as JsonObject | undefined;
     const offers = node.offers as JsonObject | undefined;
     const value = `${title} ${description}`;
-    const registrationUrl = [offers?.url, node.url].find(
+    const registrationUrl = [offers?.url].find(
       (url) => typeof url === "string" && /^https?:\/\//.test(url),
     );
     return [{
-      company: typeof organizer?.name === "string" ? organizer.name : inferCompany(title),
+      sourceUrl: typeof node.url === "string" ? node.url : undefined,
+      company: organizer?.["@type"] === "Corporation" && typeof organizer.name === "string" ? organizer.name : inferCompany(title),
       title,
       description: description || null,
       startAt,
@@ -279,7 +312,8 @@ function uConnectEvent(content: string, sourceUrl?: string): ExtractedEvent[] | 
 }
 
 export function extractStructuredEvents(content: string, sourceUrl?: string) {
-  return localistEvents(content) ?? jsonLdEvents(content) ?? uConnectEvent(content, sourceUrl);
+  if (sourceUrl && /^https:\/\/career\.cornell\.edu\/events\/(?:\d{4}\/\d{2}\/(?:page\/\d+\/)?)?$/.test(sourceUrl)) return [];
+  return graduateCalendarEvents(content) ?? localistEvents(content) ?? jsonLdEvents(content) ?? uConnectEvent(content, sourceUrl);
 }
 
 const eventJsonSchema = {
@@ -290,17 +324,17 @@ const eventJsonSchema = {
     "registrationDeadline", "confidence",
   ],
   properties: {
-    company: { type: "string", nullable: true },
+    company: { type: ["string", "null"] },
     title: { type: "string" },
-    description: { type: "string", nullable: true },
-    startAt: { type: "string", nullable: true },
-    endAt: { type: "string", nullable: true },
-    location: { type: "string", nullable: true },
+    description: { type: ["string", "null"] },
+    startAt: { type: ["string", "null"] },
+    endAt: { type: ["string", "null"] },
+    location: { type: ["string", "null"] },
     mode: { type: "string", enum: ["IN_PERSON", "VIRTUAL", "HYBRID", "UNKNOWN"] },
     type: { type: "string", enum: ["INFO_SESSION", "TECH_TALK", "COFFEE_CHAT", "INTERVIEW", "CAREER_FAIR", "DEADLINE", "WORKSHOP", "OTHER"] },
     careerCategories: { type: "array", items: { type: "string", enum: ["SWE", "ML / AI", "Hardware", "Product", "Finance", "Consulting", "Data", "Engineering", "Healthcare", "Marketing / Media", "Government / Policy", "Science / Biotech", "Other"] } },
-    registrationUrl: { type: "string", nullable: true },
-    registrationDeadline: { type: "string", nullable: true },
+    registrationUrl: { type: ["string", "null"] },
+    registrationDeadline: { type: ["string", "null"] },
     confidence: { type: "number" },
   },
 };
@@ -308,12 +342,13 @@ const eventJsonSchema = {
 async function extractWithGemini(content: string, sourceUrl: string) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY is not configured");
-  const model = process.env.EXTRACTION_MODEL || "gemini-2.5-flash-lite";
+  const model = process.env.EXTRACTION_MODEL || "gemini-3.5-flash-lite";
   const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      signal: AbortSignal.timeout(30_000),
+      headers: { "content-type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
         systemInstruction: {
           parts: [{ text: "Extract only explicit, upcoming recruiting events relevant to Cornell students. Exclude general talks, advising, exhibits, and news. Never invent missing facts. Use null for unknown values. Dates require an explicit UTC offset; Cornell local dates may use the correct America/New_York offset." }],
@@ -324,14 +359,16 @@ async function extractWithGemini(content: string, sourceUrl: string) {
           responseJsonSchema: {
             type: "object",
             required: ["events"],
-            properties: { events: { type: "array", maxItems: 50, items: eventJsonSchema } },
+            // Large maxItems bounds expand this schema beyond the provider complexity limit.
+            // Keep the 50-event bound in extractionSchema instead.
+            properties: { events: { type: "array", items: eventJsonSchema } },
           },
         },
       }),
     },
   );
   if (!response.ok) {
-    const detail = (await response.text()).slice(0, 300);
+    const detail = (await response.text()).replaceAll(key, "[redacted]").slice(0, 1000);
     throw new Error(`Gemini extraction returned ${response.status}: ${detail}`);
   }
   const body = (await response.json()) as {

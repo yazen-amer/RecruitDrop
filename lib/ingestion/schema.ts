@@ -1,5 +1,6 @@
 import { z } from "zod";
 export const extractedEventSchema = z.object({
+  sourceUrl: z.string().url().optional(),
   company: z.string().nullable(),
   title: z.string().min(1),
   description: z.string().nullable(),

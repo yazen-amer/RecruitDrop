@@ -9,6 +9,19 @@ const trustedUrls = trustedSources.map((source) => source.url);
 const managedSourceNames = [
   ...trustedSources.map((source) => source.name),
   "Cornell Engineering Career Resources",
+  "Cornell ILR CAHRS Events",
+  "Cornell ILR Student Events",
+  "Cornell Events \u2014 Career",
+  "Cornell Events \u2014 Recruiting",
+  "Cornell Events \u2014 Employer",
+  "Cornell Events \u2014 Career Fair",
+  "Cornell Events \u2014 Information Sessions",
+  "Cornell Events \u2014 Internship",
+  "Cornell Engineering",
+  "Cornell Bowers CIS",
+  "Cornell Handshake",
+  "JPMorganChase Careers",
+  "NVIDIA University Recruiting",
 ];
 await db.source.updateMany({
   where: {
@@ -26,12 +39,13 @@ for (const source of trustedSources) {
       name: source.name,
       kind: source.kind,
       config: source.config,
-      enabled: true,
+      enabled: source.enabled,
     },
   });
 }
 
-for (const item of mockEvents) {
+const seedEvents = process.argv.includes("--sources-only") ? [] : mockEvents;
+for (const item of seedEvents) {
   const company = await db.company.upsert({
     where: { normalizedName: normalize(item.company) },
     create: { name: item.company, normalizedName: normalize(item.company) },
@@ -67,5 +81,5 @@ for (const item of mockEvents) {
 }
 await db.$disconnect();
 console.log(
-  `Seeded ${mockEvents.length} mock events and synced ${trustedSources.length} trusted sources`,
+  `Seeded ${seedEvents.length} mock events and synced ${trustedSources.length} trusted sources`,
 );

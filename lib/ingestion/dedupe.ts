@@ -13,19 +13,16 @@ export function similarity(a: string, b: string) {
   return union ? intersection / union : 0;
 }
 export function likelyDuplicate(a: ExtractedEvent, b: ExtractedEvent) {
-  if (
-    a.registrationUrl &&
-    b.registrationUrl &&
-    canonicalUrl(a.registrationUrl) === canonicalUrl(b.registrationUrl)
-  )
-    return true;
   if (!a.startAt || !b.startAt) return false;
   const hours = Math.abs(Date.parse(a.startAt) - Date.parse(b.startAt)) / 36e5;
-  return (
-    normalize(a.company || "") === normalize(b.company || "") &&
-    hours <= 3 &&
-    similarity(a.title, b.title) >= 0.65
-  );
+  if (hours > 3) return false;
+  if (a.location && b.location && normalize(a.location) !== normalize(b.location)) return false;
+  if (a.sourceUrl && b.sourceUrl && canonicalUrl(a.sourceUrl) === canonicalUrl(b.sourceUrl) &&
+      /\/event\/|\/events\/\d{4}\/\d{2}\/\d{2}\//.test(new URL(a.sourceUrl).pathname) && similarity(a.title, b.title) >= 0.5)
+    return true;
+  if (a.company && b.company && normalize(a.company) !== normalize(b.company)) return false;
+  if (a.registrationUrl && b.registrationUrl && canonicalUrl(a.registrationUrl) === canonicalUrl(b.registrationUrl)) return true;
+  return similarity(a.title, b.title) >= 0.65;
 }
 export function canonicalUrl(raw: string) {
   const url = new URL(raw);

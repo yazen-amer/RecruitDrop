@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { extractStructuredEvents } from "./extract";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { extractEvents, extractStructuredEvents } from "./extract";
 
 describe("structured event extraction", () => {
   it("parses relevant Localist events and rejects unrelated events", () => {
@@ -49,7 +49,7 @@ describe("structured event extraction", () => {
       startDate: "2099-10-01T18:00:00-04:00",
       eventAttendanceMode: "https://schema.org/OnlineEventAttendanceMode",
       location: { name: "Zoom" },
-      organizer: { name: "Acme" },
+      organizer: { "@type": "Corporation", name: "Acme" },
       url: "https://example.com/event",
     })}__JSON_LD_END__`;
 
@@ -77,4 +77,56 @@ describe("structured event extraction", () => {
       registrationUrl: "https://cornell.joinhandshake.com/events/2029097",
     });
   });
+});
+
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+it("sends JSON Schema null unions without a complexity-expanding maxItems", async () => {
+  vi.stubEnv("GEMINI_API_KEY", "test-key");
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: '{"events":[]}' }] } }] })));
+  vi.stubGlobal("fetch", fetchMock);
+  expect(await extractEvents("Public career page", "https://example.edu/careers")).toEqual([]);
+  const [url, request] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+  const body = JSON.parse(String(request.body));
+  expect(url).not.toContain("test-key");
+  expect(body.generationConfig.responseSchema).toBeUndefined();
+  const schema = body.generationConfig.responseJsonSchema;
+  expect(schema.properties.events.maxItems).toBeUndefined();
+  expect(JSON.stringify(schema)).not.toContain("nullable");
+  for (const field of ["company", "description", "startAt", "endAt", "location", "registrationUrl", "registrationDeadline"])
+    expect(schema.properties.events.items.properties[field].type).toEqual(["string", "null"]);
+});
+it("retains all upcoming Localist instances with their event URL", () => {
+  const events = extractStructuredEvents(JSON.stringify({ events: [{ event: {
+    title: "Employer Career Fair", description_text: "Meet recruiters", localist_url: "https://events.cornell.edu/event/fair",
+    event_instances: [{ event_instance: { start: "2099-10-01T12:00:00Z" } }, { event_instance: { start: "2099-10-02T12:00:00Z" } }],
+  } }] }));
+  expect(events).toHaveLength(2);
+  expect(events?.[1].sourceUrl).toBe("https://events.cornell.edu/event/fair");
+});
+it("does not ask Gemini to extract empty Cornell monthly archives", async () => {
+  vi.stubGlobal("fetch", vi.fn());
+  expect(await extractEvents("No events", "https://career.cornell.edu/events/2099/10/")).toEqual([]);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("parses the graduate careers API's UTC dates, explicit RSVP and unknown company", () => {
+  const events = extractStructuredEvents(JSON.stringify({ total_pages: 1, events: [{
+    title: "Learn about a career in engineering and scientific consulting",
+    description: '<p>Explore career opportunities.</p><a href="https://example.edu/register">Please RSVP</a>',
+    utc_start_date: "2099-10-15 19:00:00", utc_end_date: "2099-10-15 20:00:00",
+    venue: { venue: "Plant Science 404" }, url: "https://gradcareers.cornell.edu/event/consulting/", all_day: false,
+  }] }));
+  expect(events?.[0]).toMatchObject({ company: null, startAt: "2099-10-15T19:00:00Z", location: "Plant Science 404", registrationUrl: "https://example.edu/register", careerCategories: ["Consulting", "Engineering"] });
+});
+it("rejects general tech talks without a recruiting purpose", () => {
+  expect(extractStructuredEvents(JSON.stringify({ events: [{ event: { title: "Physics Tech Talk", description_text: "Research seminar", event_instances: [{ event_instance: { start: "2099-10-15T19:00:00Z" } }] } }] }))).toEqual([]);
+});
+
+it("excludes explicitly cancelled recruiting events", () => {
+  expect(extractStructuredEvents(JSON.stringify({ events: [{ event: { title: "CANCELLED Employer Career Fair", description_text: "Meet recruiters", event_instances: [{ event_instance: { start: "2099-10-15T19:00:00Z" } }] } }] }))).toEqual([]);
+});
+
+it("does not fabricate an employer from a title with trailing whitespace", () => {
+  const events = extractStructuredEvents(JSON.stringify({ events: [{ event: { title: "Career workshop on consulting ", description_text: "Explore career options", event_instances: [{ event_instance: { start: "2099-10-15T19:00:00Z" } }] } }] }));
+  expect(events?.[0].company).toBeNull();
 });

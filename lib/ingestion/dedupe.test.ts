@@ -49,3 +49,21 @@ describe("deduplication", () => {
       similarity("Software info session", "Investment banking coffee chat"),
     ).toBeLessThan(0.65));
 });
+
+it("does not merge recurring events by registration URL alone", () => {
+  expect(likelyDuplicate(event(), event({ startAt: "2026-09-24T18:00:00-04:00" }))).toBe(false);
+});
+it("does not merge events with conflicting locations or companies", () => {
+  expect(likelyDuplicate(event(), event({ location: "Duffield Hall" }))).toBe(false);
+  expect(likelyDuplicate(event(), event({ company: "Acme" }))).toBe(false);
+});
+it("matches the same event when one source omits the company", () => {
+  expect(likelyDuplicate(event(), event({ company: null, registrationUrl: null }))).toBe(true);
+});
+
+it("uses an exact event detail URL to recognize refreshed company extraction", () => {
+  expect(likelyDuplicate(event({ sourceUrl: "https://career.cornell.edu/events/2026/09/23/talk/" }), event({ sourceUrl: "https://career.cornell.edu/events/2026/09/23/talk/", company: "Corrected employer" }))).toBe(true);
+});
+it("does not merge different events on a shared listing URL", () => {
+  expect(likelyDuplicate(event({ sourceUrl: "https://events.cornell.edu/api/2/events", registrationUrl: null }), event({ sourceUrl: "https://events.cornell.edu/api/2/events", title: "Investment Banking Coffee Chat", registrationUrl: null }))).toBe(false);
+});

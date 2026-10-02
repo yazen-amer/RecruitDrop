@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchSourceDocuments } from "./fetch";
+import { fetchSourceDocuments, robotsPolicy } from "./fetch";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -64,4 +64,31 @@ describe("fetchSourceDocuments", () => {
     });
     expect(documents.map(({ url }) => url)).toEqual([event]);
   });
+});
+
+it("honors specific robots groups, wildcard rules, allow precedence and crawl delay", () => {
+  const robots = 'User-agent: *\nDisallow: /private/\nUser-agent: RecruitDrop\nDisallow: /events/*\nAllow: /events/public/\nCrawl-delay: 2';
+  expect(robotsPolicy(robots, "https://example.edu/events/private/")).toEqual({ allowed: false, delay: 2000 });
+  expect(robotsPolicy(robots, "https://example.edu/events/public/fair").allowed).toBe(true);
+});
+it("reports failed details while retaining successful pages", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+    const url = input.toString();
+    if (url.endsWith("robots.txt")) return new Response("User-agent: *\nAllow: /");
+    if (url.endsWith("bad")) return new Response("Unavailable", { status: 503 });
+    return new Response('<a href="/events/bad">Event</a>', { headers: { "content-type": "text/html" } });
+  }));
+  const failed = vi.fn();
+  const docs = await fetchSourceDocuments({ url: "https://failures.example.edu/events/", kind: "WEB_PAGE", config: { maxDetailPages: 2, includePathPatterns: ["/events/"] } }, failed);
+  expect(docs).toHaveLength(1);
+  expect(failed).toHaveBeenCalledWith("https://failures.example.edu/events/bad", expect.any(Error));
+});
+
+it("paginates the public API within its configured bound", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => new Response(
+    input.toString().endsWith("robots.txt") ? "User-agent: *\nAllow: /" : JSON.stringify({ page: { total: 100 }, events: [] }),
+    { headers: { "content-type": "application/json" } },
+  )));
+  const docs = await fetchSourceDocuments({ url: "https://api.example.edu/api/2/events?pp=100", kind: "API", config: { maxApiPages: 2 } });
+  expect(docs.map((doc) => doc.url)).toEqual(["https://api.example.edu/api/2/events?pp=100", "https://api.example.edu/api/2/events?pp=100&page=2"]);
 });

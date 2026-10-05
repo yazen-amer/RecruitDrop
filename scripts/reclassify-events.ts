@@ -1,5 +1,5 @@
 import { getDb } from "../lib/db";
-import { careerCategories, inferHost } from "../lib/ingestion/metadata";
+import { reconcileCategories, inferHost, retainedDescriptions } from "../lib/ingestion/metadata";
 import { normalize } from "../lib/ingestion/dedupe";
 
 // Dry run by default. Changes only host/category fields, never events or source references.
@@ -10,12 +10,8 @@ try {
   let changed = 0;
   for (const event of events) {
     const company = inferHost(event.title, event.description ?? "", event.company?.name ?? null);
-    const descriptions = new Set([event.description ?? ""]);
-    for (const source of event.sources) {
-      const payload = source.rawPayload;
-      if (payload && typeof payload === "object" && !Array.isArray(payload) && typeof payload.description === "string") descriptions.add(payload.description);
-    }
-    const categories = careerCategories(event.title, [...descriptions].join("\n"), company, event.startAt.toISOString());
+    const descriptions = retainedDescriptions(event.description, event.sources.map(source => source.rawPayload));
+    const categories = reconcileCategories(event.title, descriptions, company, event.startAt.toISOString());
     if (company === (event.company?.name ?? null) && JSON.stringify(categories) === JSON.stringify(event.careerCategories)) continue;
     console.log(JSON.stringify({ id: event.id, title: event.title, before: { host: event.company?.name ?? null, categories: event.careerCategories }, after: { host: company, categories } }));
     if (apply) await db.$transaction(async tx => {

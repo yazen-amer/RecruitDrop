@@ -22,6 +22,7 @@ const labels: Record<string, string> = {
   WORKSHOP: "Workshop",
   OTHER: "Career event",
 };
+const sourceLabels: Record<string, string> = { "Cornell Events - Public Recruiting Coverage": "Cornell Events", "Cornell Career Network Events": "Cornell Career Network", "USAJOBS - Student-accessible Virtual Career Events": "USAJOBS" };
 export function EventCard({ event }: { event: RecruitingEvent }) {
   const { saved, toggle } = useSaved();
   const [now] = useState(() => Date.now());
@@ -32,7 +33,7 @@ export function EventCard({ event }: { event: RecruitingEvent }) {
   const closingSoon = action.closingSoon;
   return (
     <article className="event-card">
-      <div className="date-tile">
+      <time className="date-tile" dateTime={event.startAt} aria-label={d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" })}>
         <span>
           {d.toLocaleString("en-US", {
             month: "short",
@@ -45,19 +46,13 @@ export function EventCard({ event }: { event: RecruitingEvent }) {
             timeZone: "America/New_York",
           })}
         </b>
-      </div>
+      </time>
       <div className="event-main">
         <Link href={`/events/${event.slug}`} className="event-title">
           {event.title}
         </Link>
         <div className="event-kicker">
-          <span
-            className="company-avatar"
-            style={{ background: event.companyColor }}
-          >
-            {event.companyInitials}
-          </span>
-          <span>{event.company}</span>
+          <span className="event-host">{event.company}</span>
           <span className="dot">·</span>
           <span>{labels[event.type]}</span>
           {action.closed && <span className="deadline-badge">Registration closed</span>}
@@ -83,14 +78,6 @@ export function EventCard({ event }: { event: RecruitingEvent }) {
             {event.location}
           </span>
         </div>
-        <div className="event-bottom">
-          <div className="tags">
-            {event.categories.map((c) => (
-              <span key={c}>{c}</span>
-            ))}
-          </div>
-          <a className="source" href={event.sourceUrl} target="_blank" rel="noreferrer">via {event.sourceName}</a>
-        </div>
         {deadline && <p className="deadline-line">Registration deadline: {deadline.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })}</p>}
       </div>
       <div className="card-actions">
@@ -98,9 +85,10 @@ export function EventCard({ event }: { event: RecruitingEvent }) {
           onClick={() => toggle(event.id)}
           className={isSaved ? "save-button saved" : "save-button"}
           aria-pressed={isSaved}
-          aria-label={isSaved ? "Remove from saved" : "Save event"}
+          aria-label={isSaved ? `Remove ${event.title} from saved` : `Save ${event.title}`}
         >
           <Bookmark size={18} fill={isSaved ? "currentColor" : "none"} />
+          <span>{isSaved ? "Saved" : "Save"}</span>
         </button>
         <a
           className="register-button"
@@ -110,7 +98,10 @@ export function EventCard({ event }: { event: RecruitingEvent }) {
         >
           {action.label} <ExternalLink size={14} />
         </a>
-        <div className="card-utilities">{!event.isMock && <a className="icon-link" href={`/api/events/${event.slug}/calendar`} aria-label={`Add ${event.title} to calendar`}><CalendarPlus size={16} /></a>}<ShareButton title={event.title} path={`/events/${event.slug}`} /></div>
+      </div>
+      <div className="event-bottom">
+        <div className="tags">{event.categories.filter(category => category !== "Other").map(category => <span key={category}>{category}</span>)}</div>
+        <div className="card-utilities"><a className="source" href={event.sourceUrl} target="_blank" rel="noreferrer" title={event.sourceName}>via {sourceLabels[event.sourceName] ?? event.sourceName}</a>{!event.isMock && <a className="icon-link" href={`/api/events/${event.slug}/calendar`} aria-label={`Add ${event.title} to calendar`}><CalendarPlus size={16} /></a>}<ShareButton title={event.title} path={`/events/${event.slug}`} /></div>
       </div>
     </article>
   );

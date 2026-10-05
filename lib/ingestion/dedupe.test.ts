@@ -64,6 +64,9 @@ it("matches the same event when one source omits the company", () => {
 it("uses an exact event detail URL to recognize refreshed company extraction", () => {
   expect(likelyDuplicate(event({ sourceUrl: "https://career.cornell.edu/events/2026/09/23/talk/" }), event({ sourceUrl: "https://career.cornell.edu/events/2026/09/23/talk/", company: "Corrected employer" }))).toBe(true);
 });
+it("recognizes refreshed employers on uppercase USAJOBS detail paths", () => {
+  expect(likelyDuplicate(event({ sourceUrl: "https://www.usajobs.gov/Event/123" }), event({ sourceUrl: "https://www.usajobs.gov/Event/123", company: "Corrected agency" }))).toBe(true);
+});
 it("does not merge different events on a shared listing URL", () => {
   expect(likelyDuplicate(event({ sourceUrl: "https://events.cornell.edu/api/2/events", registrationUrl: null }), event({ sourceUrl: "https://events.cornell.edu/api/2/events", title: "Investment Banking Coffee Chat", registrationUrl: null }))).toBe(false);
 });

@@ -55,4 +55,24 @@ describe("ingestion persistence", () => {
     expect(run).toMatchObject({ status: "PARTIAL", discoveredCount: 2, createdCount: 1, errorCount: 2 });
     expect(mocks.db.source.update).toHaveBeenCalled();
   });
+  it("replaces stale same-source evidence while preserving disciplines from another source", async () => {
+    mocks.extract.mockResolvedValue([{ ...item, description: "Healthcare career opportunities." }]);
+    mocks.db.event.findMany.mockResolvedValue([{ id: "existing", title: item.title, normalizedTitle: "employer career fair", description: "Financial services careers.", startAt: new Date(item.startAt), location: null, company: null, companyId: null, mode: "UNKNOWN", careerCategories: ["Finance"], sources: [
+      { sourceId: "source", sourceUrl: item.sourceUrl, rawPayload: { description: "Financial services careers." } },
+      { sourceId: "second", sourceUrl: "https://another.edu/event/fair", rawPayload: { description: "Product management career opportunities." } },
+    ] }]);
+    await ingestSource("source");
+    const update = mocks.db.event.update.mock.calls[0][0];
+    expect(update.where).toEqual({ id: "existing" });
+    expect(update.data.description).toBe("Healthcare career opportunities.");
+    expect(update.data.careerCategories).toEqual(["Product", "Healthcare"]);
+    expect(update.data.sources.upsert.update.rawPayload.description).toBe("Healthcare career opportunities.");
+    expect(mocks.db.event.create).not.toHaveBeenCalled();
+  });
+  it("clears speculative persisted categories when refreshed evidence supports none", async () => {
+    mocks.extract.mockResolvedValue([{ ...item, description: "Meet employers and explore opportunities.", careerCategories: [] }]);
+    mocks.db.event.findMany.mockResolvedValue([{ id: "existing", title: item.title, normalizedTitle: "employer career fair", description: "Software engineering roles.", startAt: new Date(item.startAt), location: null, company: null, companyId: null, mode: "UNKNOWN", careerCategories: ["SWE"], sources: [{ sourceId: "source", sourceUrl: item.sourceUrl, rawPayload: { description: "Software engineering roles." } }] }]);
+    await ingestSource("source");
+    expect(mocks.db.event.update.mock.calls[0][0].data.careerCategories).toEqual([]);
+  });
 });

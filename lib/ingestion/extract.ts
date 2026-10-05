@@ -4,7 +4,7 @@ import {
   type ExtractedEvent,
 } from "./schema";
 import { usaJobsEvents } from "./usajobs";
-import { careerCategories, inferHost, improveMetadata } from "./metadata";
+import { careerCategories, inferHost, improveMetadata, structuredHost } from "./metadata";
 
 const recruitingTerms =
   /\b(recruit(?:er|ing|ment)?|hiring|career fair|job fair|career workshop|career panel|career exploration|career development|career options|career in|careers week|info(?:rmation)? session|coffee chat|employer|internship|co-?op|on-campus interview|application deadline|tech talk|company presentation|networking event|networking reception|tabling|get to know)\b/i;
@@ -78,7 +78,7 @@ function graduateCalendarEvents(content: string): ExtractedEvent[] | null {
     const value = title + " " + description;
     return [{
       sourceUrl: typeof row.url === "string" ? row.url : undefined,
-      company: null, title, description: description || null, startAt, endAt: utc(row.utc_end_date), location,
+      company: structuredHost(row.organizer ?? row.organizers), title, description: description || null, startAt, endAt: utc(row.utc_end_date), location,
       mode: row.is_virtual === true || /^(online|virtual|zoom)$/i.test(location ?? "") ? "VIRTUAL" : "UNKNOWN",
       type: classifyType(value), careerCategories: classifyCategories(value),
       registrationUrl: registration ? decodeEntities(registration[1]) : null,
@@ -132,7 +132,7 @@ function localistEvents(content: string): ExtractedEvent[] | null {
       );
       results.push({
         sourceUrl: typeof event.localist_url === "string" ? event.localist_url : undefined,
-        company: inferHost(event.title, description, typeof event.organizer === "string" ? event.organizer : null),
+        company: inferHost(event.title, description, structuredHost(event.organizer ?? event.employer ?? event.company)),
         title: event.title,
         description: description || null,
         startAt,
@@ -194,7 +194,6 @@ function jsonLdEvents(content: string): ExtractedEvent[] | null {
           ? node.location
           : null;
     const attendance = String(node.eventAttendanceMode ?? "");
-    const organizer = node.organizer as JsonObject | undefined;
     const offers = node.offers as JsonObject | undefined;
     const value = `${title} ${description}`;
     const registrationUrl = [offers?.url].find(
@@ -202,7 +201,7 @@ function jsonLdEvents(content: string): ExtractedEvent[] | null {
     );
     return [{
       sourceUrl: typeof node.url === "string" ? node.url : undefined,
-      company: inferHost(title, description, ["Corporation", "Organization", "EducationalOrganization", "GovernmentOrganization"].some(type => organizer?.["@type"] === type || (Array.isArray(organizer?.["@type"]) && organizer["@type"].includes(type))) && typeof organizer?.name === "string" ? organizer.name : null),
+      company: inferHost(title, description, structuredHost(node.organizer)),
       title,
       description: description || null,
       startAt,

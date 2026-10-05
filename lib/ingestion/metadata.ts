@@ -1,6 +1,16 @@
 import type { ExtractedEvent } from "./schema";
 
 type Category = ExtractedEvent["careerCategories"][number];
+
+export function structuredHost(value: unknown): string | null {
+  if (typeof value === "string") return normalizeHost(value);
+  if (Array.isArray(value)) return value.map(structuredHost).find(Boolean) ?? null;
+  if (!value || typeof value !== "object") return null;
+  const object = value as Record<string, unknown>;
+  const types = Array.isArray(object["@type"]) ? object["@type"] : [object["@type"]];
+  if (types.includes("Person")) return null;
+  return typeof object.name === "string" ? normalizeHost(object.name) : null;
+}
 // Match career disciplines, not generic words such as tech, data, energy or health.
 const rules: [Category, RegExp][] = [
   ["SWE", /\b(?:software engineering|software developers?|software engineers?|computer science|computing careers?|cybersecurity careers?)\b/i],
@@ -49,18 +59,20 @@ export function normalizeHost(value: string | null): string | null {
 export function inferHost(title: string, description = "", explicit: string | null = null): string | null {
   if (normalizeHost(explicit)) return normalizeHost(explicit);
   description = description.split(/(?<=[.!?])\s+|\n+/).filter(sentence => !/\b(?:formerly|former|previously|prior to)\b/i.test(sentence)).join("\n");
+  const organizer = description.match(/\b(?:[Hh]osted|[Oo]rganized|[Pp]resented) by\s+(?:the\s+)?([A-Z][\w&’' -]{2,90}?)(?=[.,;!\n]|\s+(?:for|to|on|and learn)\b|$)/)?.[1];
+  if (normalizeHost(organizer ?? null)) return normalizeHost(organizer ?? null);
+  const titled = organizations.filter(([pattern]) => pattern.test(title));
+  if (titled.length > 1) return null; // A joint panel does not establish a single host.
+  if (titled.length === 1) return titled[0][1];
   // A mentioned speaker's past employer is not an event organizer.
   for (const [pattern, name] of organizations) {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+");
     if (pattern.test(description) && new RegExp(`(?:hosted by|join|meet|career with|please join)\\s+(?:the\\s+)?${escaped}\\b|${escaped}(?:['’]s|\\s+(?:will be hosting|hosts?\\b))`, "i").test(description)) return name;
   }
-  const host = description.match(/\b(?:[Hh]osted|[Oo]rganized|[Pp]resented) by\s+(?:the\s+)?([A-Z][\w&’' -]{2,90}?)(?=[.,;!\n]|\s+(?:for|to|on|and learn)\b|$)/)?.[1]
-    ?? description.match(/\b(?:Join|Please join)\s+(?:the\s+)?([A-Z][\w&’' -]{1,90}?)\s+for\b/)?.[1]
+  const host = description.match(/\b(?:Join|Please join)\s+(?:the\s+)?([A-Z][\w&’' -]{1,90}?)\s+for\b/)?.[1]
     ?? description.match(/\b(?:The\s+)?([A-Z][\w&’' -]{2,90}?)\s+hosts?\s+info(?:rmation)? sessions?\b/)?.[1]
     ?? description.match(/CAREER DAY\s*@\s*([A-Z][A-Z &]{2,60})(?=[!\n]|$)/)?.[1];
   if (normalizeHost(host ?? null)) return normalizeHost(host ?? null);
-  const titled = organizations.find(([pattern]) => pattern.test(title));
-  if (titled) return titled[1];
   const prefix = title.trim().match(/^(.*?)\s+(?:[-–—:]\s*)?(?:virtual\s+)?(?:info(?:rmation)? session|coffee chats?|tech talk|recruiting|career fair|job fair|tabling)\b/i)?.[1]
     .replace(/^(meet|get to know|join)\s+/i, "").trim();
   return prefix && prefix.length <= 80 && !/cornell|career|engineering|workshop|networking|student|employer|university|college|\b(?:a|the|learn|explore)\b/i.test(prefix) ? normalizeHost(prefix) : null;
@@ -73,7 +85,7 @@ export function scopeDescription(description: string, startAt?: string | null): 
   if (headings.length < 2) return description;
   const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "long", day: "numeric" }).formatToParts(new Date(startAt));
   const match = headings.findIndex((heading) => heading[1] === parts.find(p => p.type === "month")?.value && heading[2] === parts.find(p => p.type === "day")?.value);
-  if (match < 0) return description;
+  if (match < 0) return description.slice(0, headings[0].index);
   return description.slice(0, headings[0].index) + description.slice(headings[match].index, headings[match + 1]?.index);
 }
 
@@ -86,7 +98,7 @@ function matchCategories(text: string): Category[] {
 export function careerCategories(title: string, description = "", company: string | null = null, startAt?: string | null): Category[] {
   const scoped = scopeDescription(description, startAt).replace(/\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}\s*:[^\n]+(?=\n)/g, "");
   const preparation = /resume|résumé|job seekers?|job search|internship search|application (?:tips|process|workshop)|interview (?:prep|skills)|using (?:AI|ChatGPT)/i.test(title);
-  if (preparation) return /federal|government|Bureau of Prisons/i.test(`${title} ${scoped}`) ? ["Government / Policy"] : ["Other"];
+  if (preparation) return /federal|government|Bureau of Prisons/i.test(`${title} ${scoped}`) ? ["Government / Policy"] : [];
   const titleTags = matchCategories(title.replace(/\b(?:College|School|Department) of Engineering\b/gi, ""));
   if (titleTags.length) return titleTags;
   // Ignore addresses, technology/tool usage, and incidental speaker/company history.
@@ -97,7 +109,27 @@ export function careerCategories(title: string, description = "", company: strin
   const tags = matchCategories(evidence);
   const industry = organizations.find(([, name]) => name === normalizeHost(company))?.[2];
   if (tags.length) return industry === "Government / Policy" && !tags.includes(industry) ? [...tags, industry] : tags;
-  return industry && /recruit|internship|career|info(?:rmation)? session|coffee chat|get to know|tabling/i.test(title) ? [industry] : ["Other"];
+  return industry && /recruit|internship|career|info(?:rmation)? session|coffee chat|get to know|tabling/i.test(title) ? [industry] : [];
+}
+
+export function sourceDescription(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object" || !("description" in payload)) return null;
+  return typeof payload.description === "string" ? payload.description : null;
+}
+
+export function retainedDescriptions(fallback: string | null | undefined, payloads: unknown[]): (string | null | undefined)[] {
+  const descriptions = payloads.map(sourceDescription).filter((text): text is string => Boolean(text));
+  // The canonical description may predate the latest source payloads. Do not resurrect it.
+  return descriptions.length ? descriptions : [fallback];
+}
+
+// Scope each source's series independently, then retain only supported disciplines.
+export function reconcileCategories(title: string, descriptions: (string | null | undefined)[], company: string | null, startAt: string): Category[] {
+  const evidence = [...new Set(descriptions.filter((text): text is string => Boolean(text)))];
+  const supported = [...new Set(evidence.flatMap(description => careerCategories(title, description, null, startAt)).concat(careerCategories(title, "", null, startAt)))];
+  const fallback = careerCategories(title, "", company, startAt);
+  const result: Category[] = !supported.length ? fallback : fallback.includes("Government / Policy") && !supported.includes("Government / Policy") ? [...supported, "Government / Policy"] : supported;
+  return result.sort((a, b) => rules.findIndex(([category]) => category === a) - rules.findIndex(([category]) => category === b));
 }
 
 export function improveMetadata(event: ExtractedEvent): ExtractedEvent {

@@ -21,4 +21,16 @@ describe("personalized radar", () => {
     expect(filterEvents([event], { ...defaultFilters, dateRange: "7", eventType: event.type }, now)).toHaveLength(1);
     expect(filterEvents([{ ...event, startAt: "2099-02-01T12:00:00Z" }], { ...defaultFilters, dateRange: "7" }, now)).toEqual([]);
   });
+  it("keeps zero-category events visible and accessible through the existing Other filter", () => {
+    const unclassified = { ...event, categories: [] };
+    expect(filterEvents([unclassified], defaultFilters, now)).toEqual([unclassified]);
+    expect(filterEvents([unclassified], { ...defaultFilters, category: "Other" }, now)).toEqual([unclassified]);
+    expect(filterEvents([unclassified], { ...defaultFilters, category: "SWE" }, now)).toEqual([]);
+  });
+  it("sorts both by upcoming date and by discovery date", () => {
+    const first = { ...event, id: "first", discoveredAt: "2099-01-01T12:00:00Z" };
+    const second = { ...event, id: "second", startAt: "2099-01-04T12:00:00Z", discoveredAt: "2099-01-02T12:00:00Z" };
+    expect(filterEvents([second, first], defaultFilters, now).map(e => e.id)).toEqual(["first", "second"]);
+    expect(filterEvents([first, second], { ...defaultFilters, sort: "added" }, now).map(e => e.id)).toEqual(["second", "first"]);
+  });
 });

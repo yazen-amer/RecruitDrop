@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { escapeHtml, sendEmail } from "@/lib/email";
+import { matchesCareerArea } from "@/lib/feed";
 
 function authorized(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
   for (const subscription of subscriptions) {
     const companies = subscription.companyNames.map((value) => value.toLowerCase());
     const matches = events.filter((event) => {
-      const categoryMatch = !subscription.categories.length || event.careerCategories.some((category) => subscription.categories.includes(category));
+      const categoryMatch = !subscription.categories.length || subscription.categories.some(category => matchesCareerArea(event.careerCategories, category));
       const typeMatch = !subscription.eventTypes.length || subscription.eventTypes.includes(event.type);
       const company = event.company?.name.toLowerCase() ?? "";
       const companyMatch = !companies.length || companies.some((value) => company.includes(value));

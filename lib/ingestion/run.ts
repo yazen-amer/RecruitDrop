@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { fetchSourceDocuments, parseSourceConfig } from "./fetch";
 import { extractEvents } from "./extract";
 import { normalize, likelyDuplicate, canonicalUrl } from "./dedupe";
-import { careerCategories } from "./metadata";
+import { reconcileCategories, retainedDescriptions } from "./metadata";
 const slugify = (s: string) => normalize(s).replaceAll(" ", "-").slice(0, 70);
 export async function ingestSource(sourceId: string) {
   const db = getDb();
@@ -73,17 +73,20 @@ export async function ingestSource(sourceId: string) {
         }, { ...item, sourceUrl }));
         if (duplicate) {
           const sameDetail = /\/event\/|\/events\/\d{4}\/\d{2}\/\d{2}\//i.test(new URL(sourceUrl).pathname) && duplicate.sources.some((s) => canonicalUrl(s.sourceUrl) === canonicalUrl(sourceUrl));
+          const description = sameDetail && item.description ? item.description : duplicate.description || item.description;
+          const otherPayloads = duplicate.sources.filter(s => !(s.sourceId === sourceId && canonicalUrl(s.sourceUrl) === canonicalUrl(sourceUrl))).map(s => s.rawPayload);
+          const descriptions = [item.description, ...retainedDescriptions(sameDetail && item.description ? null : duplicate.description, otherPayloads)];
           await db.event.update({
             where: { id: duplicate.id },
             data: {
               title: sameDetail ? item.title : duplicate.title,
               normalizedTitle: sameDetail ? normalize(item.title) : duplicate.normalizedTitle,
-              description: duplicate.description || item.description,
+              description,
               companyId: sameDetail ? company?.id ?? null : duplicate.companyId ?? company?.id,
               endAt: duplicate.endAt ?? (item.endAt ? new Date(item.endAt) : null),
               location: duplicate.location ?? item.location,
               mode: duplicate.mode === "UNKNOWN" ? item.mode : duplicate.mode,
-              careerCategories: careerCategories(sameDetail ? item.title : duplicate.title, [duplicate.description, item.description].filter(Boolean).join("\n"), company?.name ?? duplicate.company?.name ?? null, item.startAt),
+              careerCategories: reconcileCategories(sameDetail ? item.title : duplicate.title, descriptions, sameDetail ? company?.name ?? null : duplicate.company?.name ?? company?.name ?? null, item.startAt),
               registrationUrl: duplicate.registrationUrl || item.registrationUrl,
               sources: {
                 upsert: {

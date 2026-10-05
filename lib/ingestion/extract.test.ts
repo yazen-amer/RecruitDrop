@@ -2,6 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { extractEvents, extractStructuredEvents } from "./extract";
 
 describe("structured event extraction", () => {
+  it("accepts explicit object employers and organization arrays ahead of title brands", () => {
+    const base = { title: "Goldman Sachs Career Panel", description_text: "Meet recruiters and learn about internships", event_instances: [{ event_instance: { start: "2099-10-01T18:00:00-04:00" } }] };
+    expect(extractStructuredEvents(JSON.stringify({ events: [{ event: { ...base, employer: { name: "Cornell Career Services" } } }] }))?.[0].company).toBe("Cornell Career Services");
+    const node = { "@type": "Event", name: base.title, description: base.description_text, startDate: "2099-10-01T18:00:00-04:00", organizer: [{ "@type": "Person", name: "Guest speaker" }, { "@type": "EducationalOrganization", name: "Cornell Career Services" }] };
+    expect(extractStructuredEvents(`__JSON_LD_START__${JSON.stringify(node)}__JSON_LD_END__`)?.[0].company).toBe("Cornell Career Services");
+  });
   it("recognizes Organization organizers and preserves unknowns for a speaker-only event", () => {
     const content = (organizer: object) => `__JSON_LD_START__${JSON.stringify({ "@type": "Event", name: "Career Workshop", description: "Explore internship careers", startDate: "2099-10-01T18:00:00-04:00", organizer })}__JSON_LD_END__`;
     expect(extractStructuredEvents(content({ "@type": "Organization", name: "Cornell Career Services" }))?.[0].company).toBe("Cornell Career Services");
@@ -122,7 +128,7 @@ it("sanity-checks Gemini categories and does not use a speaker's former employer
   vi.stubEnv("GEMINI_API_KEY", "test-key");
   const event = { company: "Jane Street", title: "ChatGPT for Job Seekers", description: "Use AI tools to improve a resume. The speaker formerly worked at Jane Street.", startAt: "2099-10-01T18:00:00-04:00", endAt: null, location: null, mode: "UNKNOWN", type: "WORKSHOP", careerCategories: ["ML / AI", "Finance", "SWE"], registrationUrl: null, registrationDeadline: null, confidence: 0.9 };
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ events: [event] }) }] } }] }))));
-  expect((await extractEvents(event.description, "https://example.edu/career-workshop"))[0]).toMatchObject({ company: null, careerCategories: ["Other"] });
+  expect((await extractEvents(event.description, "https://example.edu/career-workshop"))[0]).toMatchObject({ company: null, careerCategories: [] });
 });
 it("does not borrow a different listing event's organizer or accept an invented host", async () => {
   vi.stubEnv("GEMINI_API_KEY", "test-key");

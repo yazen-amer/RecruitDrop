@@ -1,4 +1,8 @@
+import { getSiteUrl } from "@/lib/site-url";
 import Link from "next/link";
+import type { Metadata } from "next";
+import { ShareButton } from "@/components/share-button";
+import { eventAction, eventStructuredData } from "@/lib/event-presentation";
 import { notFound } from "next/navigation";
 import {
   ArrowLeft,
@@ -24,12 +28,15 @@ export default async function EventDetail({
 }) {
   const { slug } = await params;
   const event = process.env.DATABASE_URL
-    ? (await getEventBySlug(slug)) ?? findEvent(slug)
+    ? await getEventBySlug(slug)
     : findEvent(slug);
   if (!event) notFound();
   const d = new Date(event.startAt);
+  const action = eventAction(event, new Date().getTime());
+  const structured = eventStructuredData(event);
   return (
     <div className="detail-page">
+      {structured && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structured).replace(/</g, "\\u003c") }} />}
       <Link href="/" className="back-link">
         <ArrowLeft size={16} /> Back to all events
       </Link>
@@ -68,9 +75,7 @@ export default async function EventDetail({
                 Discovered via {event.sourceName}. Details should be verified on
                 the original page.
               </p>
-              <a href={event.sourceUrl} target="_blank" rel="noreferrer">
-                View original source <ExternalLink size={13} />
-              </a>
+              {(event.sources?.length ? event.sources : [{ name: event.sourceName, url: event.sourceUrl }]).map((source) => <p key={source.url + source.name}><a href={source.url} target="_blank" rel="noreferrer">{source.name} <ExternalLink size={13} /></a></p>)}
             </div>
           </section>
         </article>
@@ -85,7 +90,7 @@ export default async function EventDetail({
                   {d.toLocaleDateString("en-US", {
                     weekday: "long",
                     month: "long",
-                    day: "numeric",
+                    day: "numeric", year: "numeric",
                     timeZone: "America/New_York",
                   })}
                 </b>
@@ -114,18 +119,28 @@ export default async function EventDetail({
             </div>
             <a
               className="primary-wide"
-              href={event.registrationUrl}
+              href={action.href}
               target="_blank"
               rel="noreferrer"
             >
-              Register or apply <ExternalLink size={15} />
+              {action.label} <ExternalLink size={15} />
             </a>
             {!event.isMock && <a className="secondary-wide" href={`/api/events/${event.slug}/calendar`}><CalendarPlus size={15} /> Add to calendar</a>}
-            <Link className="secondary-wide" href={`/alerts?company=${encodeURIComponent(event.company)}`}>Follow {event.company}</Link>
+            {event.companyKnown !== false && <Link className="secondary-wide" href={`/alerts?company=${encodeURIComponent(event.company)}`}>Follow {event.company}</Link>}
+            <ShareButton title={event.title} path={`/events/${event.slug}`} />
+            {action.closed && <p className="form-error">The listed registration deadline has passed. Check the source for availability.</p>}
             <SaveButton id={event.id} />
           </div>
         </aside>
       </div>
     </div>
   );
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const event = process.env.DATABASE_URL ? await getEventBySlug(slug) : findEvent(slug);
+  if (!event) return { title: "Event not found | RecruitDrop", robots: { index: false } };
+  const description = event.description.slice(0, 180);
+  return { title: event.title + " | RecruitDrop", description, alternates: getSiteUrl() ? { canonical: "/events/" + event.slug } : undefined, openGraph: { title: event.title, description, type: "website", ...(getSiteUrl() ? { url: "/events/" + event.slug } : {}) }, robots: event.isMock || Date.parse(event.startAt) < Date.now() ? { index: false } : undefined };
 }

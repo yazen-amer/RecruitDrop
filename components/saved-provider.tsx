@@ -8,7 +8,8 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const sync = () => {
       try {
-        setSaved(JSON.parse(localStorage.getItem("crr-saved") || "[]"));
+        const value: unknown = JSON.parse(localStorage.getItem("crr-saved") || "[]");
+        setSaved(Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : []);
       } catch {}
     };
 
@@ -22,7 +23,7 @@ export function SavedProvider({ children }: { children: React.ReactNode }) {
       const next = current.includes(id)
         ? current.filter((x) => x !== id)
         : [...current, id];
-      localStorage.setItem("crr-saved", JSON.stringify(next));
+      try { localStorage.setItem("crr-saved", JSON.stringify(next)); } catch { /* Keep saves for this visit if storage is blocked. */ }
       return next;
     });
 

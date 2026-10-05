@@ -31,13 +31,16 @@ function toRecruitingEvent(event: NonNullable<DatabaseEvent> & {
   sources: { sourceUrl: string; source: { name: string } }[];
 }): RecruitingEvent {
   const source = event.sources[0];
-  const company = event.company?.name ?? "Cornell recruiting event";
+  const company = event.company?.name ?? "Host not listed";
   return {
     id: event.id,
     slug: event.slug,
     title: event.title,
     description: event.description ?? "See the original source for full details.",
     company,
+    companyKnown: Boolean(event.company),
+    registrationIsDirect: Boolean(event.registrationUrl),
+    sources: event.sources.map((entry) => ({ name: entry.source.name, url: entry.sourceUrl })),
     companyInitials: initials(company),
     companyColor: colorFor(company),
     startAt: event.startAt.toISOString(),
@@ -68,8 +71,13 @@ export async function getUpcomingEvents() {
 
 export async function getEventBySlug(slug: string) {
   const event = await getDb().event.findFirst({
-    where: { slug, isPublished: true },
+    where: { slug, isPublished: true, isMock: false },
     include,
   });
   return event ? toRecruitingEvent(event) : null;
+}
+
+export async function getLastSourceScan() {
+  const run = await getDb().ingestionRun.findFirst({ where: { status: { in: ["SUCCEEDED", "PARTIAL"] }, source: { enabled: true }, finishedAt: { not: null } }, orderBy: { finishedAt: "desc" }, select: { finishedAt: true } });
+  return run?.finishedAt?.toISOString();
 }

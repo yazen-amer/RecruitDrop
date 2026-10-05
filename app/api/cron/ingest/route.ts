@@ -14,8 +14,8 @@ export async function GET(request: Request) {
       enabled: true,
       OR: [{ nextCheckAt: null }, { nextCheckAt: { lte: new Date() } }],
     },
-    // Serial, robots-paced crawls must fit inside the platform execution budget.
-    take: 1,
+    // Daily scheduling must check both managed public sources; keep work bounded.
+    take: 2,
     orderBy: { nextCheckAt: "asc" },
   });
   const results = [];

@@ -47,9 +47,15 @@ pnpm dev
 
 Open `http://localhost:3000`. Without `DATABASE_URL`, the feed still renders its clearly labeled sample dataset, but database-backed submission and ingestion endpoints return an explicit unavailable response.
 
+### Personalized radar and calendar
+
+Filters are shareable through query parameters (`q`, `area`, `format`, `type`, `days`, `sort`). Search includes descriptions and locations. Users can explicitly save a default view on their device. Career-area counts overlap; they expose uneven coverage rather than suggesting every major has the same supply.
+
+`/calendar` creates a public, filtered subscription URL for Google Calendar, Apple Calendar, or Outlook. `/api/calendar` returns upcoming published real events with stable IDs; calendar clients control refresh frequency. Neither a subscription nor a single-event calendar download fabricates an end time. The live calendar requires a database but no email provider. Database errors and empty feeds never silently fall back to sample events. Event detail pages retain all source references, label unknown hosts, distinguish source links from explicit registration links, and identify expired registration deadlines.
+
 ### Personalized alerts
 
-Set `APP_URL`, `RESEND_API_KEY`, and `ALERT_FROM_EMAIL` to enable double-opt-in weekly email alerts. `ALERT_FROM_EMAIL` must use a domain verified with Resend. The `/api/cron/alerts` endpoint is protected by the same `CRON_SECRET` as ingestion; `vercel.json` calls it every Monday. Alert preferences support multiple career areas and event types plus followed company names. Every message includes a one-click unsubscribe link.
+Set `APP_URL`, `RESEND_API_KEY`, and `ALERT_FROM_EMAIL` to enable double-opt-in weekly email alerts. `ALERT_FROM_EMAIL` must use a domain verified with Resend. The `/api/cron/alerts` endpoint is protected by the same `CRON_SECRET` as ingestion; `vercel.json` calls it every Monday. Alert preferences support multiple career areas and event types plus followed company names. Every message includes a one-click unsubscribe link. Without email configuration, the alert page explains that email alerts are unavailable and offers the live calendar instead.
 
 ## Ingestion
 
@@ -67,7 +73,7 @@ pnpm ingest
 
 Or run only one source with `pnpm ingest <source-id>`. A source's JSON `config` controls detail/listing-page limits, calendar months, included/excluded URL patterns, check interval, and whether high-confidence events from that trusted source may publish automatically. Fetching and extraction are bounded. Page requests have a 30-second timeout and retry timeouts once with robots pacing. Page fetches and event writes fail independently; run logs retain failed URLs and counts for discovered, created, updated, and failed items. Console summaries also count skipped events. Failed sources receive a 12-hour retry delay.
 
-For deployment, `/api/cron/ingest` processes one due source per invocation and declares a 300-second execution budget, so robots-paced crawling does not queue multiple long runs in one request. It requires `Authorization: Bearer $CRON_SECRET`. `vercel.json` schedules this every three hours on Vercel; an equivalent external scheduler can call the same endpoint on any host. A deployed server—not a laptop—owns the schedule.
+For deployment, `/api/cron/ingest` processes up to two due sources serially per invocation within a 300-second execution budget. This lets both enabled sources refresh on the daily Vercel schedule instead of alternating days. It requires `Authorization: Bearer $CRON_SECRET`. An equivalent external scheduler can call the same endpoint on any host. A deployed server—not a laptop—owns the schedule.
 
 The fetcher checks robots.txt for each origin, honors allow/disallow patterns and crawl delays, fetches serially with at least one second between requests, and checks redirects before following them. Unavailable robots policies fail closed. It rejects obvious private-network targets and URL credentials, applies a timeout and response-size limit, and identifies itself as RecruitDrop. Source owners must also review site terms before enabling new sources. Authenticated Handshake pages are never fetched; public Cornell pages may retain an explicit Handshake registration link.
 
@@ -93,7 +99,7 @@ pnpm ingest <id>   # ingest one source
 - Keep `GEMINI_API_KEY`, `DATABASE_URL`, and `CRON_SECRET` server-side. The Gemini key is optional for sources that expose supported structured data.
 - Add authentication before exposing source administration or moderation.
 - Replace the small in-memory submission limiter with Redis or a gateway rate limit for multi-instance deployment.
-- The next high-value product layer is opt-in alerts keyed by saved companies and career categories; the schema already preserves the necessary signals.
+- Set `APP_URL` to the canonical public origin when deploying outside Vercel. On Vercel, metadata and the sitemap fall back to `VERCEL_PROJECT_PRODUCTION_URL`.
 
 ### Gemini extraction
 

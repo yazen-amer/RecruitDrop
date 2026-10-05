@@ -1,10 +1,12 @@
+import { getSiteUrl } from "@/lib/site-url";
 import type { Metadata } from "next";
 import "./globals.css";
 import { SiteHeader } from "@/components/site-header";
 import { SavedProvider } from "@/components/saved-provider";
 
 export const metadata: Metadata = {
-  title: "Cornell Recruiting Radar",
+  metadataBase: getSiteUrl() ? new URL(getSiteUrl()!) : undefined,
+  title: "RecruitDrop | Cornell recruiting events",
   description:
     "Recruiting events, info sessions, coffee chats, and deadlines for Cornell students.",
   icons: {
@@ -26,7 +28,7 @@ export default function RootLayout({
           <main className="site-shell">{children}</main>
           <footer>
             <div>
-              <b>Cornell Recruiting Radar</b>
+              <b>RecruitDrop</b>
               <span>Built for students who hate finding out late.</span>
             </div>
             <p>

@@ -14,6 +14,7 @@ export type RecruitingEvent = {
   title: string;
   description: string;
   company: string;
+  companyKnown?: boolean;
   companyInitials: string;
   companyColor: string;
   startAt: string;
@@ -23,6 +24,8 @@ export type RecruitingEvent = {
   type: EventType;
   categories: string[];
   registrationUrl: string;
+  registrationIsDirect?: boolean;
+  sources?: { name: string; url: string }[];
   sourceName: string;
   sourceUrl: string;
   discoveredAt: string;

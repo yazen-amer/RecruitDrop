@@ -1,6 +1,6 @@
 export const trustedSources = [
   {
-    enabled: true,
+    enabled: false,
     name: "Cornell Career Network Events",
     url: "https://career.cornell.edu/events/",
     kind: "WEB_PAGE" as const,
@@ -13,6 +13,7 @@ export const trustedSources = [
       preferDetailPages: true,
       intervalHours: 24,
       autoPublishTrusted: true,
+      disabledReason: "Site terms restrict commercial content reuse without written permission; permission must be confirmed before automated refresh",
     },
   },
   {
@@ -20,7 +21,14 @@ export const trustedSources = [
     name: "Cornell Events - Public Recruiting Coverage",
     url: "https://events.cornell.edu/api/2/events?days=180&pp=100&distinct=true",
     kind: "API" as const,
-    config: { intervalHours: 12, maxApiPages: 30, autoPublishTrusted: true },
+    config: { intervalHours: 12, maxApiPages: 30, maxApiEventDetails: 20, autoPublishTrusted: true },
+  },
+  {
+    enabled: true,
+    name: "USAJOBS - Student-accessible Virtual Career Events",
+    url: "https://www.usajobs.gov/Event?IsOnline=true",
+    kind: "WEB_PAGE" as const,
+    config: { intervalHours: 24, maxListingPages: 3, autoPublishTrusted: true },
   },
   {
     enabled: false,

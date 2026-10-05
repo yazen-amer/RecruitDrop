@@ -3,6 +3,43 @@ import { fetchSourceDocuments, robotsPolicy } from "./fetch";
 
 afterEach(() => vi.unstubAllGlobals());
 
+it("expands only relevant recurring Cornell events within the detail bound", async () => {
+  const event = (id: number, title: string) => ({ id, title, recurring: false, description_text: "A session", event_instances: [{ event_instance: { start: "2099-10-10T17:00:00-04:00" } }] });
+  const fetchMock = vi.fn(async (input: string | URL | Request) => {
+    const url = input.toString();
+    if (url.endsWith("robots.txt")) return new Response("User-agent: *\nAllow: /");
+    const body = url.endsWith("/api/2/events/1")
+      ? { event: { ...event(1, "Employer Career Workshop"), event_instances: [{ event_instance: { start: "2099-10-10T17:00:00-04:00" } }, { event_instance: { start: "2099-11-10T17:00:00-05:00" } }] } }
+      : { page: { total: 1 }, events: [{ event: event(1, "Employer Career Workshop") }, { event: event(2, "Research Seminar") }, { event: event(3, "Career Exploration") }] };
+    return new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  const docs = await fetchSourceDocuments({ url: "https://events.cornell.edu/api/2/events?distinct=true", kind: "API", config: { maxApiPages: 2, maxApiEventDetails: 1 } });
+  expect(JSON.parse(docs[0].content).events[0].event.event_instances).toHaveLength(2);
+  expect(fetchMock.mock.calls.map(([url]) => url.toString())).not.toContain("https://events.cornell.edu/api/2/events/2");
+  expect(fetchMock.mock.calls.map(([url]) => url.toString())).not.toContain("https://events.cornell.edu/api/2/events/3");
+});
+
+it.each(["unavailable", "malformed"])("preserves Cornell listing data if a detail response is %s", async (failure) => {
+  vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+    const url = input.toString();
+    if (url.endsWith("robots.txt")) return new Response("User-agent: *\nAllow: /");
+    if (url.endsWith("/api/2/events/4")) return failure === "unavailable" ? new Response("Unavailable", { status: 503 }) : new Response("not JSON", { headers: { "content-type": "application/json" } });
+    return new Response(JSON.stringify({ events: [{ event: { id: 4, recurring: true, title: "Career Workshop", event_instances: [{ event_instance: { start: "2099-10-10T17:00:00-04:00" } }] } }] }), { headers: { "content-type": "application/json" } });
+  }));
+  const failed = vi.fn();
+  const docs = await fetchSourceDocuments({ url: "https://events.cornell.edu/api/2/events", kind: "API", config: { maxApiEventDetails: 1 } }, failed);
+  expect(JSON.parse(docs[0].content).events[0].event.event_instances).toHaveLength(1);
+  expect(failed).toHaveBeenCalledWith("https://events.cornell.edu/api/2/events/4", expect.any(Error));
+});
+
+it("paginates USAJOBS within the listing limit and preserves virtual filters", async () => {
+  const fetchMock = vi.fn(async (input: string | URL | Request) => new Response(input.toString().endsWith("robots.txt") ? "User-agent: *\nAllow: /" : "<p><span>1</span> - <span>10</span> of <b>500</b> events</p>", { headers: { "content-type": "text/html" } }));
+  vi.stubGlobal("fetch", fetchMock);
+  const docs = await fetchSourceDocuments({ url: "https://www.usajobs.gov/Event?IsOnline=true", kind: "WEB_PAGE", config: { maxListingPages: 2 } });
+  expect(docs.map(doc => doc.url)).toEqual(["https://www.usajobs.gov/Event?IsOnline=true", "https://www.usajobs.gov/Event?IsOnline=true&Page=2"]);
+});
+
 describe("fetchSourceDocuments", () => {
   it("follows only configured same-origin event links", async () => {
     const fetchMock = vi.fn(async (input: string | URL | Request) => {

@@ -3,6 +3,7 @@ import {
   extractionSchema,
   type ExtractedEvent,
 } from "./schema";
+import { usaJobsEvents } from "./usajobs";
 
 const recruitingTerms =
   /\b(recruit(?:er|ing|ment)?|hiring|career fair|job fair|career workshop|career panel|career exploration|career development|career options|career in|careers week|info(?:rmation)? session|coffee chat|employer|internship|co-?op|on-campus interview|application deadline|tech talk|company presentation|networking event|networking reception|tabling|get to know)\b/i;
@@ -12,6 +13,9 @@ const excludedTerms =
 function relevant(title: string, description: string) {
   const value = `${title} ${description}`;
   if (/partner meeting|directors roundtable|members.only|by invitation|partner organizations/i.test(title + " " + description)) return false;
+  // Alumni advice and student career networking need not use recruiting jargon.
+  if (!excludedTerms.test(title) && /\b(?:alumni|alums|students)\b/i.test(value) &&
+      /advice on preparing for.*workplace|networking with fellow alumni and current students|career journeys/i.test(description)) return true;
   if (!recruitingTerms.test(value) || excludedTerms.test(title)) return false;
   const descriptionSignals =
     /recruiter|hiring|employer|job openings|full-time roles|internship roles|career opportunities/i;
@@ -51,7 +55,7 @@ function classifyCategories(value: string) {
   if (/consult/i.test(value)) categories.push("Consulting");
   if (/\bdata\b|analytics/i.test(value) && !categories.includes("ML / AI"))
     categories.push("Data");
-  if (/engineering|aerospace|mechanical|civil|chemical|energy/i.test(value) && !categories.includes("Hardware"))
+  if (/\bengineers?\b|engineering|aerospace|mechanical|energy/i.test(value) && !categories.includes("Hardware"))
     categories.push("Engineering");
   if (/health|medical|pharma|clinical|public health/i.test(value)) categories.push("Healthcare");
   if (/marketing|advertis|media|journalis|communication|entertainment/i.test(value)) categories.push("Marketing / Media");
@@ -132,6 +136,7 @@ function localistEvents(content: string): ExtractedEvent[] | null {
       : [];
     for (const instanceRow of instances as JsonObject[]) {
       const instance = instanceRow?.event_instance as JsonObject | undefined;
+      if (instance?.all_day === true) continue; // Midnight is a placeholder, not a verified event time.
       const startAt = validOffsetDate(instance?.start);
       if (!startAt || Date.parse(startAt) < Date.now() - 3_600_000) continue;
       const value = `${event.title} ${description}`;
@@ -313,6 +318,7 @@ function uConnectEvent(content: string, sourceUrl?: string): ExtractedEvent[] | 
 
 export function extractStructuredEvents(content: string, sourceUrl?: string) {
   if (sourceUrl && /^https:\/\/career\.cornell\.edu\/events\/(?:\d{4}\/\d{2}\/(?:page\/\d+\/)?)?$/.test(sourceUrl)) return [];
+  if (sourceUrl && new URL(sourceUrl).hostname === "www.usajobs.gov" && new URL(sourceUrl).pathname === "/Event") return usaJobsEvents(content, classifyCategories);
   return graduateCalendarEvents(content) ?? localistEvents(content) ?? jsonLdEvents(content) ?? uConnectEvent(content, sourceUrl);
 }
 

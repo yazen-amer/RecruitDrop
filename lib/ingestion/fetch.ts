@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { extractStructuredEvents } from "./extract";
 
 export type SourceDocument = { url: string; content: string };
 
@@ -66,6 +67,7 @@ const sourceConfigSchema = z.object({
   autoPublishTrusted: z.boolean().optional(),
   disabledReason: z.string().optional(),
   maxApiPages: z.number().int().min(1).max(30).optional(),
+  maxApiEventDetails: z.number().int().min(0).max(20).optional(),
 });
 
 export type SourceConfig = z.infer<typeof sourceConfigSchema>;
@@ -219,6 +221,15 @@ export async function fetchSourceDocuments(source: {
     : [source.url];
   const listings = await fetchInBatches(listingUrls, onFailure);
   if (!listings.length) throw new Error("No source listing pages could be fetched");
+  if (new URL(source.url).hostname === "www.usajobs.gov" && new URL(source.url).pathname === "/Event") {
+    const count = readableContent(listings[0].raw).match(/(\d+)\s*-\s*(\d+)\s+of\s+(\d+)\s+events/i);
+    const size = count ? Number(count[2]) - Number(count[1]) + 1 : 0;
+    const pages = size > 0 ? Math.min(Math.ceil(Number(count![3]) / size), config.maxListingPages ?? 1) : 1;
+    const urls = Array.from({ length: pages - 1 }, (_, index) => {
+      const url = new URL(source.url); url.searchParams.set("Page", String(index + 2)); return url.href;
+    });
+    listings.push(...await fetchInBatches(urls, onFailure));
+  }
   if (config.calendarMonthsAhead && config.maxListingPages) {
     const paginationUrls = [
       ...new Set(
@@ -253,6 +264,23 @@ export async function fetchSourceDocuments(source: {
       const url = new URL(source.url);
       url.searchParams.set("page", String(page));
       listings.push(...await fetchInBatches([url.toString()], onFailure));
+    }
+  }
+  if (source.kind === "API" && config.maxApiEventDetails && new URL(source.url).hostname === "events.cornell.edu") {
+    // distinct=true keeps the broad scan small, but hides later career-series sessions.
+    const rows = listings.flatMap(page => (JSON.parse(page.raw).events ?? []) as { event: { id: number; recurring?: boolean } }[]);
+    const ids = [...new Set(rows.filter(row => Number.isSafeInteger(row.event?.id) && extractStructuredEvents(JSON.stringify({ events: [row] }))?.length).map(row => row.event.id))].slice(0, config.maxApiEventDetails);
+    const details = await fetchInBatches(ids.map(id => new URL(`/api/2/events/${id}`, source.url).href), onFailure);
+    const expanded = new Map(details.flatMap(page => {
+      try {
+        const event = JSON.parse(page.raw).event;
+        if (!event || !ids.includes(event.id) || !Array.isArray(event.event_instances)) throw new Error("Invalid Cornell event detail response");
+        return [[event.id, event] as const];
+      } catch (error) { onFailure(page.url, error); return []; }
+    }));
+    for (const page of listings) {
+      const data = JSON.parse(page.raw);
+      if (Array.isArray(data.events)) page.raw = JSON.stringify({ ...data, events: data.events.map((row: { event: { id: number } }) => expanded.has(row.event?.id) ? { event: expanded.get(row.event.id) } : row) });
     }
   }
   const documents: SourceDocument[] = listings.map(({ url, raw }) => ({

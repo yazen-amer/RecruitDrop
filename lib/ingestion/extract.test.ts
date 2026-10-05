@@ -2,6 +2,24 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { extractEvents, extractStructuredEvents } from "./extract";
 
 describe("structured event extraction", () => {
+  it("does not turn all-day programme placeholders into midnight recruiting sessions", () => {
+    const events = extractStructuredEvents(JSON.stringify({ events: [{ event: { title: "Global Careers Week", event_instances: [
+      { event_instance: { start: "2099-11-02T00:00:00-05:00", all_day: true } },
+      { event_instance: { start: "2099-11-02T17:00:00-05:00", all_day: false } },
+    ] } }] }));
+    expect(events).toHaveLength(1);
+    expect(events?.[0].startAt).toBe("2099-11-02T17:00:00-05:00");
+  });
+  it("accepts explicit student alumni career advice but not unrelated alumni lectures", () => {
+    const row = (title: string, description_text: string) => ({ event: { title, description_text, event_instances: [{ event_instance: { start: "2099-10-23T12:00:00-04:00" } }] } });
+    const events = extractStructuredEvents(JSON.stringify({ events: [
+      row("Fridays with Alumni", "Alums offer advice on preparing for an ever-changing workplace, discussing internships and employment."),
+      row("Cornell Business Forum", "An evening of networking with fellow alumni and current students."),
+      row("Alumni Science Lecture", "A professor discusses her career and her latest research discoveries."),
+      row("Partner Meeting", "An evening of networking with fellow alumni and current students."),
+    ] }));
+    expect(events?.map(event => event.title)).toEqual(["Fridays with Alumni", "Cornell Business Forum"]);
+  });
   it("parses relevant Localist events and rejects unrelated events", () => {
     const content = JSON.stringify({
       events: [

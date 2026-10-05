@@ -13,6 +13,7 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "node --env-file=.env --import tsx prisma/seed.ts",
     "ingest": "node --env-file=.env --import tsx scripts/ingest.ts",
+    "events:reclassify": "node --env-file=.env --import tsx scripts/reclassify-events.ts",
     "test": "vitest run"
   },
   "dependencies": {

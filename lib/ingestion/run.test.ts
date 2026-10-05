@@ -38,6 +38,12 @@ describe("ingestion persistence", () => {
     expect(mocks.db.event.create).not.toHaveBeenCalled();
     expect(mocks.db.event.update.mock.calls[0][0].data.sources.upsert.create).toMatchObject({ sourceId: "source", sourceUrl: item.sourceUrl });
   });
+  it("removes stale keyword tags while retaining corroborated cross-source disciplines", async () => {
+    mocks.extract.mockResolvedValue([{ ...item, description: "Healthcare career opportunities." }]);
+    mocks.db.event.findMany.mockResolvedValue([{ id: "existing", title: item.title, normalizedTitle: "employer career fair", description: "Financial services careers.", startAt: new Date(item.startAt), location: null, company: null, companyId: null, mode: "UNKNOWN", careerCategories: ["SWE", "ML / AI", "Finance"], sources: [{ sourceUrl: "https://another.edu/event/fair" }] }]);
+    await ingestSource("source");
+    expect(mocks.db.event.update.mock.calls[0][0].data.careerCategories).toEqual(["Finance", "Healthcare"]);
+  });
   it("isolates a failed event write and counts partial fetch failures", async () => {
     mocks.fetch.mockImplementation(async (_source, onFailure) => {
       onFailure("https://example.edu/event/broken", new Error("Source returned 503"));

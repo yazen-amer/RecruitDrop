@@ -4,6 +4,7 @@ import {
   type ExtractedEvent,
 } from "./schema";
 import { usaJobsEvents } from "./usajobs";
+import { careerCategories, inferHost, improveMetadata } from "./metadata";
 
 const recruitingTerms =
   /\b(recruit(?:er|ing|ment)?|hiring|career fair|job fair|career workshop|career panel|career exploration|career development|career options|career in|careers week|info(?:rmation)? session|coffee chat|employer|internship|co-?op|on-campus interview|application deadline|tech talk|company presentation|networking event|networking reception|tabling|get to know)\b/i;
@@ -42,35 +43,11 @@ function classifyType(value: string): ExtractedEvent["type"] {
 }
 
 function classifyCategories(value: string) {
-  const categories: ExtractedEvent["careerCategories"] = [];
-  if (/software|developer|computing|computer science|cyber|tech\b/i.test(value))
-    categories.push("SWE");
-  if (/machine learning|artificial intelligence|\bAI\b|data scien/i.test(value))
-    categories.push("ML / AI");
-  if (/hardware|semiconductor|electrical|manufactur/i.test(value))
-    categories.push("Hardware");
-  if (/product manage|product design/i.test(value)) categories.push("Product");
-  if (/finance|bank|investment|accounting|real estate/i.test(value))
-    categories.push("Finance");
-  if (/consult/i.test(value)) categories.push("Consulting");
-  if (/\bdata\b|analytics/i.test(value) && !categories.includes("ML / AI"))
-    categories.push("Data");
-  if (/\bengineers?\b|engineering|aerospace|mechanical|energy/i.test(value) && !categories.includes("Hardware"))
-    categories.push("Engineering");
-  if (/health|medical|pharma|clinical|public health/i.test(value)) categories.push("Healthcare");
-  if (/marketing|advertis|media|journalis|communication|entertainment/i.test(value)) categories.push("Marketing / Media");
-  if (/government|public policy|public service|politic|international relations/i.test(value)) categories.push("Government / Policy");
-  if (/biotech|biology|chemistry|life science|laboratory|scientist/i.test(value)) categories.push("Science / Biotech");
-  return categories.length ? categories : ["Other" as const];
+  return careerCategories(value);
 }
 
 function inferCompany(title: string) {
-  const match = title.trim().match(/^(.*?)\s+(?:[-\u2013\u2014:]\s*)?(?:virtual\s+)?(?:info(?:rmation)? session|coffee chats?|tech talk|recruiting|career fair|job fair|tabling)\b/i);
-  if (!match) return null;
-  const prefix = match[1].replace(/^(meet|get to know|join)\s+/i, "").trim();
-  return prefix && !/cornell|career|engineering|workshop|networking|student|employer|university|college/i.test(prefix) && prefix.length <= 80
-    ? prefix
-    : null;
+  return inferHost(title);
 }
 
 function validOffsetDate(value: unknown): string | null {
@@ -155,17 +132,17 @@ function localistEvents(content: string): ExtractedEvent[] | null {
       );
       results.push({
         sourceUrl: typeof event.localist_url === "string" ? event.localist_url : undefined,
-        company: inferCompany(event.title),
+        company: inferHost(event.title, description, typeof event.organizer === "string" ? event.organizer : null),
         title: event.title,
         description: description || null,
         startAt,
         endAt: validOffsetDate(instance?.end),
         location,
         mode:
-          experience === "virtual" || streamUrl
+          experience === "hybrid"
+            ? "HYBRID"
+            : experience === "virtual" || streamUrl
             ? "VIRTUAL"
-            : experience === "hybrid"
-              ? "HYBRID"
               : experience === "inperson"
                 ? "IN_PERSON"
                 : "UNKNOWN",
@@ -225,7 +202,7 @@ function jsonLdEvents(content: string): ExtractedEvent[] | null {
     );
     return [{
       sourceUrl: typeof node.url === "string" ? node.url : undefined,
-      company: organizer?.["@type"] === "Corporation" && typeof organizer.name === "string" ? organizer.name : inferCompany(title),
+      company: inferHost(title, description, ["Corporation", "Organization", "EducationalOrganization", "GovernmentOrganization"].some(type => organizer?.["@type"] === type || (Array.isArray(organizer?.["@type"]) && organizer["@type"].includes(type))) && typeof organizer?.name === "string" ? organizer.name : null),
       title,
       description: description || null,
       startAt,
@@ -294,7 +271,7 @@ function uConnectEvent(content: string, sourceUrl?: string): ExtractedEvent[] | 
   const bodyStart = content.indexOf(time[0]) + time[0].length;
   const bodyEnd = content.indexOf(" Spread the word", bodyStart);
   const description = content.slice(bodyStart, bodyEnd > bodyStart ? bodyEnd : bodyStart + 2500)
-    .replace(/\s*(?:Join Us|Register|Click here to attend).*$/i, "").trim() || null;
+    .replace(/__URL__https?:\/\/\S+/g, "").replace(/\s*Click here to attend.*$/i, "").trim() || null;
   if (!relevant(title, description ?? "")) return [];
   const registrationUrl = [...content.matchAll(/__URL__(https?:\/\/\S+)/g)]
     .map((match) => match[1])
@@ -318,8 +295,8 @@ function uConnectEvent(content: string, sourceUrl?: string): ExtractedEvent[] | 
 
 export function extractStructuredEvents(content: string, sourceUrl?: string) {
   if (sourceUrl && /^https:\/\/career\.cornell\.edu\/events\/(?:\d{4}\/\d{2}\/(?:page\/\d+\/)?)?$/.test(sourceUrl)) return [];
-  if (sourceUrl && new URL(sourceUrl).hostname === "www.usajobs.gov" && new URL(sourceUrl).pathname === "/Event") return usaJobsEvents(content, classifyCategories);
-  return graduateCalendarEvents(content) ?? localistEvents(content) ?? jsonLdEvents(content) ?? uConnectEvent(content, sourceUrl);
+  if (sourceUrl && new URL(sourceUrl).hostname === "www.usajobs.gov" && new URL(sourceUrl).pathname === "/Event") return usaJobsEvents(content, classifyCategories).map(improveMetadata);
+  return (graduateCalendarEvents(content) ?? localistEvents(content) ?? jsonLdEvents(content) ?? uConnectEvent(content, sourceUrl))?.map(improveMetadata) ?? null;
 }
 
 const eventJsonSchema = {
@@ -357,7 +334,7 @@ async function extractWithGemini(content: string, sourceUrl: string) {
       headers: { "content-type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
         systemInstruction: {
-          parts: [{ text: "Extract only explicit, upcoming recruiting events relevant to Cornell students. Exclude general talks, advising, exhibits, and news. Never invent missing facts. Use null for unknown values. Dates require an explicit UTC offset; Cornell local dates may use the correct America/New_York offset." }],
+          parts: [{ text: "Extract only explicit, upcoming recruiting events relevant to Cornell students. Exclude general talks, advising, exhibits, and news. Never invent missing facts. Use null for unknown values. Dates require an explicit UTC offset; Cornell local dates may use the correct America/New_York offset. Career categories must describe the actual career focus, not incidental keywords, speaker biographies, the campus department, or the employer's other businesses. Vague tech does not establish SWE. Using AI for resumes does not establish an ML/AI career. Prefer zero or one well-supported category; multiple categories require explicit career evidence for each. Empty careerCategories is valid. Company means organizer or hiring employer: prefer structured organizer metadata, then explicit hosting statements, then a clearly named organization in the title. A speaker's former employer is not the host. Unknown hosts must be null." }],
         },
         contents: [{ role: "user", parts: [{ text: `Current time: ${new Date().toISOString()}\nSource URL: ${sourceUrl}\n\n${content}` }] }],
         generationConfig: {
@@ -394,5 +371,10 @@ export async function extractEvents(
   const structured = extractStructuredEvents(content, sourceUrl);
   if (structured !== null)
     return structured.map((event) => extractedEventSchema.parse(event));
-  return extractWithGemini(content, sourceUrl);
+  return (await extractWithGemini(content, sourceUrl)).map(event => {
+    // Scope evidence to this event; a listing may contain several different organizers.
+    const inferred = inferHost(event.title, event.description ?? "");
+    const company = inferred && content.replace(/\s+/g, " ").toLowerCase().includes(inferred.toLowerCase()) ? inferred : null;
+    return { ...event, company, careerCategories: careerCategories(event.title, event.description ?? "", company, event.startAt) };
+  });
 }

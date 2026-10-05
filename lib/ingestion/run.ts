@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { fetchSourceDocuments, parseSourceConfig } from "./fetch";
 import { extractEvents } from "./extract";
 import { normalize, likelyDuplicate, canonicalUrl } from "./dedupe";
+import { careerCategories } from "./metadata";
 const slugify = (s: string) => normalize(s).replaceAll(" ", "-").slice(0, 70);
 export async function ingestSource(sourceId: string) {
   const db = getDb();
@@ -71,7 +72,7 @@ export async function ingestSource(sourceId: string) {
           startAt: c.startAt.toISOString(), location: c.location, registrationUrl: c.registrationUrl,
         }, { ...item, sourceUrl }));
         if (duplicate) {
-          const sameDetail = /\/event\/|\/events\/\d{4}\/\d{2}\/\d{2}\//.test(new URL(sourceUrl).pathname) && duplicate.sources.some((s) => canonicalUrl(s.sourceUrl) === canonicalUrl(sourceUrl));
+          const sameDetail = /\/event\/|\/events\/\d{4}\/\d{2}\/\d{2}\//i.test(new URL(sourceUrl).pathname) && duplicate.sources.some((s) => canonicalUrl(s.sourceUrl) === canonicalUrl(sourceUrl));
           await db.event.update({
             where: { id: duplicate.id },
             data: {
@@ -82,7 +83,7 @@ export async function ingestSource(sourceId: string) {
               endAt: duplicate.endAt ?? (item.endAt ? new Date(item.endAt) : null),
               location: duplicate.location ?? item.location,
               mode: duplicate.mode === "UNKNOWN" ? item.mode : duplicate.mode,
-              careerCategories: [...new Set([...duplicate.careerCategories, ...item.careerCategories])].filter((category, _, categories) => category !== "Other" || categories.length === 1),
+              careerCategories: careerCategories(sameDetail ? item.title : duplicate.title, [duplicate.description, item.description].filter(Boolean).join("\n"), company?.name ?? duplicate.company?.name ?? null, item.startAt),
               registrationUrl: duplicate.registrationUrl || item.registrationUrl,
               sources: {
                 upsert: {

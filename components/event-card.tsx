@@ -47,6 +47,9 @@ export function EventCard({ event }: { event: RecruitingEvent }) {
         </b>
       </div>
       <div className="event-main">
+        <Link href={`/events/${event.slug}`} className="event-title">
+          {event.title}
+        </Link>
         <div className="event-kicker">
           <span
             className="company-avatar"
@@ -60,9 +63,6 @@ export function EventCard({ event }: { event: RecruitingEvent }) {
           {action.closed && <span className="deadline-badge">Registration closed</span>}
           {closingSoon && <span className="deadline-badge">Closing soon</span>}
         </div>
-        <Link href={`/events/${event.slug}`} className="event-title">
-          {event.title}
-        </Link>
         <div className="event-meta">
           <span>
             <CalendarDays size={15} />
@@ -94,8 +94,6 @@ export function EventCard({ event }: { event: RecruitingEvent }) {
         {deadline && <p className="deadline-line">Registration deadline: {deadline.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" })}</p>}
       </div>
       <div className="card-actions">
-        {!event.isMock && <a className="icon-link" href={`/api/events/${event.slug}/calendar`} aria-label={`Add ${event.title} to calendar`}><CalendarPlus size={18} /></a>}
-        <ShareButton title={event.title} path={`/events/${event.slug}`} />
         <button
           onClick={() => toggle(event.id)}
           className={isSaved ? "save-button saved" : "save-button"}
@@ -112,6 +110,7 @@ export function EventCard({ event }: { event: RecruitingEvent }) {
         >
           {action.label} <ExternalLink size={14} />
         </a>
+        <div className="card-utilities">{!event.isMock && <a className="icon-link" href={`/api/events/${event.slug}/calendar`} aria-label={`Add ${event.title} to calendar`}><CalendarPlus size={16} /></a>}<ShareButton title={event.title} path={`/events/${event.slug}`} /></div>
       </div>
     </article>
   );

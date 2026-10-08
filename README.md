@@ -4,6 +4,10 @@ A Cornell-focused feed for recruiting events, information sessions, career fairs
 
 Built with Next.js, TypeScript, PostgreSQL, and Prisma. The interface uses React components and ordinary CSS.
 
+![RecruitDrop live event feed](docs/screenshots/recruitdrop-feed.jpg)
+
+Live event feed captured October 8, 2026, with filters, source links, and calendar actions.
+
 ## How events reach the feed
 
 Each source has a configuration record. The ingestion code fetches its pages, extracts event fields, validates them with Zod, normalizes metadata, and compares candidates against existing events before writing to PostgreSQL.
